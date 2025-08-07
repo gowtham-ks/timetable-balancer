@@ -5,10 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileUpload } from '@/components/FileUpload';
 import { SettingsPanel } from '@/components/SettingsPanel';
+import { AllocationReport } from '@/components/AllocationReport';
 import { TimetableDisplay } from '@/components/TimetableDisplay';
 import { TimetableGenerator } from '@/utils/timetableGenerator';
 import { exportToCSV, exportToExcel, downloadCSV, printTimetables } from '@/utils/exportUtils';
-import { SubjectData, TeacherPreference, ScheduleSettings, ClassTimetable, TeacherTimetable } from '@/types/timetable';
+import { SubjectData, TeacherPreference, ScheduleSettings, ClassTimetable, TeacherTimetable, SubjectAllocation } from '@/types/timetable';
 import { useToast } from '@/hooks/use-toast';
 
 const Index = () => {
@@ -22,6 +23,7 @@ const Index = () => {
   });
   const [classTimetables, setClassTimetables] = useState<ClassTimetable[]>([]);
   const [teacherTimetables, setTeacherTimetables] = useState<TeacherTimetable[]>([]);
+  const [allocationReport, setAllocationReport] = useState<SubjectAllocation[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
   const { toast } = useToast();
@@ -30,6 +32,7 @@ const Index = () => {
     setSubjectData(data);
     setClassTimetables([]);
     setTeacherTimetables([]);
+    setAllocationReport([]);
     
     toast({
       title: "Data Loaded",
@@ -58,6 +61,7 @@ const Index = () => {
       
       setClassTimetables(result.classTimetables);
       setTeacherTimetables(result.teacherTimetables);
+      setAllocationReport(generator.getSubjectAllocationReport());
 
       // Get allocation report
       const allocationReport = generator.getSubjectAllocationReport();
@@ -109,6 +113,7 @@ const Index = () => {
     setTeacherPreferences([]);
     setClassTimetables([]);
     setTeacherTimetables([]);
+    setAllocationReport([]);
     
     toast({
       title: "Data Cleared",
@@ -208,11 +213,12 @@ const Index = () => {
 
           {/* Timetables Display */}
           {hasGeneratedTimetables && (
-            <Tabs defaultValue="classes" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="classes">Class Timetables</TabsTrigger>
-                <TabsTrigger value="teachers">Teacher Timetables</TabsTrigger>
-              </TabsList>
+          <Tabs defaultValue="classes" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="classes">Class Timetables</TabsTrigger>
+              <TabsTrigger value="teachers">Teacher Timetables</TabsTrigger>
+              <TabsTrigger value="report">Allocation Report</TabsTrigger>
+            </TabsList>
               
               <TabsContent value="classes" className="space-y-6">
                 <TimetableDisplay
@@ -232,6 +238,10 @@ const Index = () => {
                   lunchPeriod={scheduleSettings.lunchPeriod}
                   breakPeriods={scheduleSettings.breakPeriods}
                 />
+              </TabsContent>
+              
+              <TabsContent value="report" className="space-y-6">
+                <AllocationReport allocations={allocationReport} />
               </TabsContent>
             </Tabs>
           )}
