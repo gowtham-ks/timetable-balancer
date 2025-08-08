@@ -16,7 +16,7 @@ export class TimetableGenerator {
   private teacherWorkload: Map<string, number> = new Map();
   private classTimetables: Map<string, TimeSlot[][]> = new Map();
   private teacherTimetables: Map<string, TimeSlot[][]> = new Map();
-  private subjectSlotUsage: Map<string, Set<string>> = new Map(); // Track which time slots each subject uses
+  private subjectSlotUsage: Map<string, Set<string>> = new Map(); // Track which time slots each subject-class combination uses
 
   constructor(
     subjectData: SubjectData[],
@@ -123,10 +123,12 @@ export class TimetableGenerator {
       this.teacherWorkload.set(data.staff, 0);
     });
 
-    // Reset subject slot usage tracking
+    // Reset subject slot usage tracking (per class)
     this.subjectSlotUsage.clear();
     this.subjectData.forEach(data => {
-      this.subjectSlotUsage.set(data.subject, new Set());
+      const className = `${data.department}-${data.year}-${data.section}`;
+      const subjectClassKey = `${data.subject}-${className}`;
+      this.subjectSlotUsage.set(subjectClassKey, new Set());
     });
 
     // Clear all timetables
@@ -506,8 +508,9 @@ export class TimetableGenerator {
       return null;
     }
 
-    // Get slots already used by this subject
-    const usedSlots = this.subjectSlotUsage.get(subjectData.subject) || new Set();
+    // Get slots already used by this subject-class combination
+    const subjectClassKey = `${subjectData.subject}-${className}`;
+    const usedSlots = this.subjectSlotUsage.get(subjectClassKey) || new Set();
 
     // Priority 1: Try preferred slots first that aren't already used by this subject
     const preferredSlots = this.getPreferredSlots(subjectData, teacherPreference);
@@ -519,12 +522,12 @@ export class TimetableGenerator {
     }
 
     // Priority 2: Find best available slot that avoids repetition
-    return this.findOptimalSlotWithAntiRepetition(className, subjectData.staff, subjectData.subject);
+    return this.findOptimalSlotWithAntiRepetition(className, subjectData.staff, subjectClassKey);
   }
 
-  private findOptimalSlotWithAntiRepetition(className: string, teacher: string, subject: string): { day: number, period: number } | null {
+  private findOptimalSlotWithAntiRepetition(className: string, teacher: string, subjectClassKey: string): { day: number, period: number } | null {
     const availableSlots: { day: number, period: number, score: number }[] = [];
-    const usedSlots = this.subjectSlotUsage.get(subject) || new Set();
+    const usedSlots = this.subjectSlotUsage.get(subjectClassKey) || new Set();
 
     // Score all available slots
     for (let day = 0; day < 6; day++) {
@@ -578,11 +581,12 @@ export class TimetableGenerator {
     // Assign to teacher timetable
     teacherSchedule[slot.day][slot.period] = { ...timeSlot };
 
-    // Track slot usage for this subject (anti-repetition)
+    // Track slot usage for this subject-class combination (anti-repetition)
     const slotKey = `${slot.day}-${slot.period}`;
-    const usedSlots = this.subjectSlotUsage.get(subjectData.subject) || new Set();
+    const subjectClassKey = `${subjectData.subject}-${className}`;
+    const usedSlots = this.subjectSlotUsage.get(subjectClassKey) || new Set();
     usedSlots.add(slotKey);
-    this.subjectSlotUsage.set(subjectData.subject, usedSlots);
+    this.subjectSlotUsage.set(subjectClassKey, usedSlots);
   }
 
   private assignSlot(slot: { day: number, period: number }, subjectData: SubjectData, className: string) {

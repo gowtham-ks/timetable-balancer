@@ -20,11 +20,22 @@ export function parseCSV(csvContent: string): SubjectData[] {
   const data: SubjectData[] = [];
   
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',').map(v => v.trim());
+    const line = lines[i].trim();
     
-    if (values.length !== headers.length) {
-      console.warn(`Row ${i + 1}: Column count mismatch. Expected ${headers.length}, got ${values.length}`);
-      continue;
+    // Skip empty lines
+    if (!line) continue;
+    
+    const values = line.split(',').map(v => v.trim());
+    
+    // Handle flexible column counts - pad with empty strings if fewer columns
+    while (values.length < headers.length) {
+      values.push('');
+    }
+    
+    // Trim to expected length if more columns
+    if (values.length > headers.length) {
+      console.warn(`Row ${i + 1}: Column count mismatch. Expected ${headers.length}, got ${values.length}. Using first ${headers.length} columns.`);
+      values.splice(headers.length);
     }
 
     try {
