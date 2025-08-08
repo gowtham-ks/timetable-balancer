@@ -16,6 +16,7 @@ export class TimetableGenerator {
   private teacherWorkload: Map<string, number> = new Map();
   private classTimetables: Map<string, TimeSlot[][]> = new Map();
   private teacherTimetables: Map<string, TimeSlot[][]> = new Map();
+  private subjectSlotUsage: Map<string, Set<string>> = new Map(); // Track which time slots each subject uses
 
   constructor(
     subjectData: SubjectData[],
@@ -122,6 +123,12 @@ export class TimetableGenerator {
       this.teacherWorkload.set(data.staff, 0);
     });
 
+    // Reset subject slot usage tracking
+    this.subjectSlotUsage.clear();
+    this.subjectData.forEach(data => {
+      this.subjectSlotUsage.set(data.subject, new Set());
+    });
+
     // Clear all timetables
     this.classTimetables.forEach(schedule => {
       schedule.forEach(daySchedule => {
@@ -147,7 +154,14 @@ export class TimetableGenerator {
   private getSortedSubjects(): SubjectData[] {
     // Sort by multiple criteria for better allocation
     return [...this.subjectData].sort((a, b) => {
-      // First by remaining periods (descending) - allocate high-period subjects first
+      // Prioritize lab subjects first (they need consecutive periods)
+      const aIsLab = this.isLabSubject(a.subject);
+      const bIsLab = this.isLabSubject(b.subject);
+      if (aIsLab !== bIsLab) {
+        return bIsLab ? 1 : -1; // Labs first
+      }
+      
+      // Then by remaining periods (descending) - allocate high-period subjects first
       const aRemaining = this.getRemainingPeriods(a);
       const bRemaining = this.getRemainingPeriods(b);
       if (aRemaining !== bRemaining) {
@@ -164,6 +178,12 @@ export class TimetableGenerator {
       // Finally by subject name for consistency
       return a.subject.localeCompare(b.subject);
     });
+  }
+
+  private isLabSubject(subject: string): boolean {
+    return subject.toLowerCase().includes('lab') || 
+           subject.toLowerCase().includes('practical') ||
+           subject.toLowerCase().includes('workshop');
   }
 
   private getRemainingPeriods(subjectData: SubjectData): number {
@@ -189,32 +209,100 @@ export class TimetableGenerator {
     
     if (!allocation) return;
 
-    // Try to allocate all remaining periods for this subject
-    while (allocation.allocatedPeriods < allocation.requiredPeriods) {
-      const slot = this.findBestSlot(subjectData, className);
-      
-      if (slot) {
-        this.assignSlot(slot, subjectData, className);
-        allocation.allocatedPeriods++;
+    const isLab = this.isLabSubject(subjectData.subject);
+    const remainingPeriods = allocation.requiredPeriods - allocation.allocatedPeriods;
+    
+    if (isLab && remainingPeriods > 1) {
+      // For lab subjects, try to allocate consecutive periods
+      this.allocateConsecutivePeriods(subjectData, className, remainingPeriods);
+    } else {
+      // For regular subjects, allocate individually with anti-repetition logic
+      while (allocation.allocatedPeriods < allocation.requiredPeriods) {
+        const slot = this.findBestSlotWithAntiRepetition(subjectData, className);
         
-        // Update teacher workload
-        const currentWorkload = this.teacherWorkload.get(subjectData.staff) || 0;
-        this.teacherWorkload.set(subjectData.staff, currentWorkload + 1);
-      } else {
-        // If we can't find a slot, try relaxing constraints
-        const relaxedSlot = this.findSlotWithRelaxedConstraints(subjectData, className);
-        if (relaxedSlot) {
-          this.assignSlot(relaxedSlot, subjectData, className);
+        if (slot) {
+          this.assignSlotWithTracking(slot, subjectData, className);
           allocation.allocatedPeriods++;
           
+          // Update teacher workload
           const currentWorkload = this.teacherWorkload.get(subjectData.staff) || 0;
           this.teacherWorkload.set(subjectData.staff, currentWorkload + 1);
         } else {
-          // Can't allocate this period, log and break
-          console.warn(`Could not allocate period for ${subjectData.subject} in ${className}. 
-            Allocated: ${allocation.allocatedPeriods}/${allocation.requiredPeriods}`);
-          break;
+          // If we can't find a slot, try relaxing constraints
+          const relaxedSlot = this.findSlotWithRelaxedConstraints(subjectData, className);
+          if (relaxedSlot) {
+            this.assignSlotWithTracking(relaxedSlot, subjectData, className);
+            allocation.allocatedPeriods++;
+            
+            const currentWorkload = this.teacherWorkload.get(subjectData.staff) || 0;
+            this.teacherWorkload.set(subjectData.staff, currentWorkload + 1);
+          } else {
+            // Can't allocate this period, log and break
+            console.warn(`Could not allocate period for ${subjectData.subject} in ${className}. 
+              Allocated: ${allocation.allocatedPeriods}/${allocation.requiredPeriods}`);
+            break;
+          }
         }
+      }
+    }
+  }
+
+  private allocateConsecutivePeriods(subjectData: SubjectData, className: string, periodsNeeded: number) {
+    const allocation = this.subjectAllocations.get(`${subjectData.subject}-${className}`);
+    if (!allocation) return;
+
+    // Try to find consecutive slots for lab periods
+    for (let day = 0; day < 6; day++) {
+      for (let startPeriod = 0; startPeriod <= this.scheduleSettings.totalPeriodsPerDay - periodsNeeded; startPeriod++) {
+        // Check if we can place consecutive periods here
+        let canPlaceConsecutive = true;
+        const consecutiveSlots: { day: number, period: number }[] = [];
+        
+        for (let i = 0; i < periodsNeeded; i++) {
+          const period = startPeriod + i;
+          
+          // Skip if this is a break/lunch period
+          if (period + 1 === this.scheduleSettings.lunchPeriod || 
+              this.scheduleSettings.breakPeriods.includes(period + 1)) {
+            canPlaceConsecutive = false;
+            break;
+          }
+          
+          if (!this.isSlotAvailable(day, period, className, subjectData.staff)) {
+            canPlaceConsecutive = false;
+            break;
+          }
+          
+          consecutiveSlots.push({ day, period });
+        }
+        
+        if (canPlaceConsecutive) {
+          // Assign all consecutive periods
+          for (const slot of consecutiveSlots) {
+            this.assignSlotWithTracking(slot, subjectData, className);
+            allocation.allocatedPeriods++;
+            
+            const currentWorkload = this.teacherWorkload.get(subjectData.staff) || 0;
+            this.teacherWorkload.set(subjectData.staff, currentWorkload + 1);
+          }
+          console.log(`✅ Allocated ${periodsNeeded} consecutive periods for ${subjectData.subject} lab in ${className}`);
+          return;
+        }
+      }
+    }
+    
+    // If consecutive allocation failed, fall back to individual allocation
+    console.warn(`Could not allocate consecutive periods for ${subjectData.subject} lab. Falling back to individual allocation.`);
+    while (allocation.allocatedPeriods < allocation.requiredPeriods) {
+      const slot = this.findBestSlotWithAntiRepetition(subjectData, className);
+      if (slot) {
+        this.assignSlotWithTracking(slot, subjectData, className);
+        allocation.allocatedPeriods++;
+        
+        const currentWorkload = this.teacherWorkload.get(subjectData.staff) || 0;
+        this.teacherWorkload.set(subjectData.staff, currentWorkload + 1);
+      } else {
+        break;
       }
     }
   }
@@ -405,6 +493,96 @@ export class TimetableGenerator {
     if (teacherSlot.subject) return false;
 
     return true;
+  }
+
+  private findBestSlotWithAntiRepetition(subjectData: SubjectData, className: string): { day: number, period: number } | null {
+    const teacherPreference = this.teacherPreferences.find(
+      pref => pref.teacherName === subjectData.staff
+    );
+
+    // Check if teacher has exceeded max periods per week
+    const currentWorkload = this.teacherWorkload.get(subjectData.staff) || 0;
+    if (currentWorkload >= this.scheduleSettings.maxTeacherPeriodsPerWeek) {
+      return null;
+    }
+
+    // Get slots already used by this subject
+    const usedSlots = this.subjectSlotUsage.get(subjectData.subject) || new Set();
+
+    // Priority 1: Try preferred slots first that aren't already used by this subject
+    const preferredSlots = this.getPreferredSlots(subjectData, teacherPreference);
+    for (const slot of preferredSlots) {
+      const slotKey = `${slot.day}-${slot.period}`;
+      if (!usedSlots.has(slotKey) && this.isSlotAvailable(slot.day, slot.period, className, subjectData.staff)) {
+        return slot;
+      }
+    }
+
+    // Priority 2: Find best available slot that avoids repetition
+    return this.findOptimalSlotWithAntiRepetition(className, subjectData.staff, subjectData.subject);
+  }
+
+  private findOptimalSlotWithAntiRepetition(className: string, teacher: string, subject: string): { day: number, period: number } | null {
+    const availableSlots: { day: number, period: number, score: number }[] = [];
+    const usedSlots = this.subjectSlotUsage.get(subject) || new Set();
+
+    // Score all available slots
+    for (let day = 0; day < 6; day++) {
+      for (let period = 0; period < this.scheduleSettings.totalPeriodsPerDay; period++) {
+        // Skip lunch and break periods
+        if (period + 1 === this.scheduleSettings.lunchPeriod || 
+            this.scheduleSettings.breakPeriods.includes(period + 1)) {
+          continue;
+        }
+
+        const slotKey = `${day}-${period}`;
+        
+        // Skip slots already used by this subject (anti-repetition)
+        if (usedSlots.has(slotKey)) {
+          continue;
+        }
+
+        if (this.isSlotAvailable(day, period, className, teacher)) {
+          let score = this.calculateSlotScore(day, period, className, teacher);
+          
+          // Bonus for avoiding repetition
+          score += 50;
+          
+          availableSlots.push({ day, period, score });
+        }
+      }
+    }
+
+    // Sort by score (higher is better) and return the best slot
+    availableSlots.sort((a, b) => b.score - a.score);
+    return availableSlots.length > 0 ? { day: availableSlots[0].day, period: availableSlots[0].period } : null;
+  }
+
+  private assignSlotWithTracking(slot: { day: number, period: number }, subjectData: SubjectData, className: string) {
+    const classSchedule = this.classTimetables.get(className);
+    const teacherSchedule = this.teacherTimetables.get(subjectData.staff);
+    
+    if (!classSchedule || !teacherSchedule) return;
+
+    const timeSlot: TimeSlot = {
+      day: this.getDayName(slot.day),
+      period: slot.period + 1,
+      subject: subjectData.subject,
+      staff: subjectData.staff,
+      className
+    };
+
+    // Assign to class timetable
+    classSchedule[slot.day][slot.period] = { ...timeSlot };
+
+    // Assign to teacher timetable
+    teacherSchedule[slot.day][slot.period] = { ...timeSlot };
+
+    // Track slot usage for this subject (anti-repetition)
+    const slotKey = `${slot.day}-${slot.period}`;
+    const usedSlots = this.subjectSlotUsage.get(subjectData.subject) || new Set();
+    usedSlots.add(slotKey);
+    this.subjectSlotUsage.set(subjectData.subject, usedSlots);
   }
 
   private assignSlot(slot: { day: number, period: number }, subjectData: SubjectData, className: string) {
