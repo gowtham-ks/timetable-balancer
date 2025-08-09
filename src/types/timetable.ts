@@ -12,6 +12,10 @@ export interface SubjectData {
 
 export interface TeacherPreference {
   teacherName: string;
+  department?: string;
+  year?: string;
+  section?: string;
+  className?: string;
   preferredDay: string;
   preferredPeriod: number;
 }
