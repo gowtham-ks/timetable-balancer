@@ -2,36 +2,37 @@ import {
   SubjectData, 
   TeacherPreference, 
   ScheduleSettings, 
+  TimeSlot, 
   ClassTimetable, 
   TeacherTimetable, 
-  TimeSlot, 
   SubjectAllocation 
-} from '@/types/timetable';
+} from '../types/timetable';
 
 export class TimetableGenerator {
-  private subjectData: SubjectData[] = [];
-  private teacherPreferences: TeacherPreference[] = [];
+  private subjectData: SubjectData[];
+  private teacherPreferences: TeacherPreference[];
   private scheduleSettings: ScheduleSettings;
-  private subjectAllocations: Map<string, SubjectAllocation> = new Map();
-  private teacherWorkload: Map<string, number> = new Map();
   private classTimetables: Map<string, TimeSlot[][]> = new Map();
   private teacherTimetables: Map<string, TimeSlot[][]> = new Map();
-  private subjectPeriodUsage: Map<string, Set<number>> = new Map(); // Track which periods each subject-class combination uses (to prevent repetition across days)
-  private libraryOccupancy: Map<string, string> = new Map(); // Track library usage: "day-period" -> className
-  private labStaffSchedules: Map<string, TimeSlot[][]> = new Map(); // Track individual lab staff schedules
+  private subjectAllocations: Map<string, SubjectAllocation> = new Map();
+  private teacherWorkload: Map<string, number> = new Map();
+  private labStaffSchedules: Map<string, TimeSlot[][]> = new Map();
 
   constructor(
-    subjectData: SubjectData[],
-    teacherPreferences: TeacherPreference[],
+    subjectData: SubjectData[], 
+    teacherPreferences: TeacherPreference[], 
     scheduleSettings: ScheduleSettings
   ) {
     this.subjectData = subjectData;
     this.teacherPreferences = teacherPreferences;
     this.scheduleSettings = scheduleSettings;
-    this.initializeDataStructures();
+    this.initializeAllocations();
   }
 
-  private initializeDataStructures() {
+  private initializeAllocations(): void {
+    this.subjectAllocations.clear();
+    this.teacherWorkload.clear();
+    
     // Initialize subject allocations
     this.subjectData.forEach(data => {
       const className = `${data.department}-${data.year}-${data.section}`;
@@ -96,8 +97,8 @@ export class TimetableGenerator {
     // Reset all allocations
     this.resetAllocations();
 
-    // Multiple passes to ensure all subjects get allocated - increased for better allocation
-    let maxAttempts = 15;
+    // Multiple passes to ensure all subjects get allocated - dramatically increased for better allocation
+    let maxAttempts = 500;
     let attempt = 0;
     
     while (attempt < maxAttempts && !this.isAllocationComplete()) {
@@ -114,45 +115,39 @@ export class TimetableGenerator {
       attempt++;
     }
 
-    // Report any unallocated periods
-    this.reportAllocationStatus();
+    // Convert maps to arrays for return
+    const classTimetables: ClassTimetable[] = [];
+    const teacherTimetables: TeacherTimetable[] = [];
 
-    return {
-      classTimetables: this.getClassTimetables(),
-      teacherTimetables: this.getTeacherTimetables()
-    };
+    this.classTimetables.forEach((schedule, className) => {
+      classTimetables.push({ className, schedule });
+    });
+
+    this.teacherTimetables.forEach((schedule, teacherName) => {
+      teacherTimetables.push({ teacherName, schedule });
+    });
+
+    console.log(`\n🎯 Generation complete after ${attempt} attempts`);
+    console.log(`📊 Final allocation status:`, this.getAllocationSummary());
+
+    return { classTimetables, teacherTimetables };
   }
 
-  private resetAllocations() {
-    // Reset subject allocations to 0
+  private resetAllocations(): void {
+    // Reset subject allocation counts
     this.subjectAllocations.forEach(allocation => {
       allocation.allocatedPeriods = 0;
     });
 
-    // Reset teacher workload for all staff
-    this.teacherWorkload.clear();
-    this.subjectData.forEach(data => {
-      const staffMembers = this.parseStaffMembers(data.staff);
-      staffMembers.forEach(staff => {
-        this.teacherWorkload.set(staff.trim(), 0);
-      });
+    // Reset teacher workloads
+    this.teacherWorkload.forEach((_, teacher) => {
+      this.teacherWorkload.set(teacher, 0);
     });
 
-    // Reset library occupancy
-    this.libraryOccupancy.clear();
-
-    // Reset subject period usage tracking (per class)
-    this.subjectPeriodUsage.clear();
-    this.subjectData.forEach(data => {
-      const className = `${data.department}-${data.year}-${data.section}`;
-      const subjectClassKey = `${data.subject}-${className}`;
-      this.subjectPeriodUsage.set(subjectClassKey, new Set());
-    });
-
-    // Clear all timetables
+    // Clear all timetable assignments
     this.classTimetables.forEach(schedule => {
-      schedule.forEach(daySchedule => {
-        daySchedule.forEach(slot => {
+      schedule.forEach(day => {
+        day.forEach(slot => {
           slot.subject = undefined;
           slot.staff = undefined;
           slot.className = undefined;
@@ -161,19 +156,8 @@ export class TimetableGenerator {
     });
 
     this.teacherTimetables.forEach(schedule => {
-      schedule.forEach(daySchedule => {
-        daySchedule.forEach(slot => {
-          slot.subject = undefined;
-          slot.staff = undefined;
-          slot.className = undefined;
-        });
-      });
-    });
-
-    // Reset lab staff schedules
-    this.labStaffSchedules.forEach(schedule => {
-      schedule.forEach(daySchedule => {
-        daySchedule.forEach(slot => {
+      schedule.forEach(day => {
+        day.forEach(slot => {
           slot.subject = undefined;
           slot.staff = undefined;
           slot.className = undefined;
@@ -182,22 +166,42 @@ export class TimetableGenerator {
     });
   }
 
+  private allocateSubjectCompletely(subjectData: SubjectData): void {
+    const className = `${subjectData.department}-${subjectData.year}-${subjectData.section}`;
+    
+    if (this.isLabSubject(subjectData.subject)) {
+      this.allocateConsecutivePeriods(subjectData, className);
+    } else if (this.isLibrarySubject(subjectData.subject)) {
+      this.allocateLibraryPeriods(subjectData, className);
+    } else if (this.isGamesSubject(subjectData.subject)) {
+      this.allocateGamesPeriods(subjectData, className);
+    } else {
+      this.allocateRegularPeriods(subjectData, className);
+    }
+  }
+
   private getSortedSubjects(): SubjectData[] {
-    // Sort by multiple criteria for better allocation
     return [...this.subjectData].sort((a, b) => {
-      // Prioritize lab subjects first (they need consecutive periods)
+      // First priority: Lab subjects (harder to place)
       const aIsLab = this.isLabSubject(a.subject);
       const bIsLab = this.isLabSubject(b.subject);
-      if (aIsLab !== bIsLab) {
-        return bIsLab ? 1 : -1; // Labs first
+      if (aIsLab && !bIsLab) return -1;
+      if (!aIsLab && bIsLab) return 1;
+      
+      // Second priority: More periods first
+      if (a.periods !== b.periods) {
+        return b.periods - a.periods;
       }
       
-      // Then by remaining periods (descending) - allocate high-period subjects first
-      const aRemaining = this.getRemainingPeriods(a);
-      const bRemaining = this.getRemainingPeriods(b);
-      if (aRemaining !== bRemaining) {
-        return bRemaining - aRemaining;
-      }
+      // Third priority: Teacher preferences
+      const aHasPref = this.teacherPreferences.some(pref => 
+        a.staff.includes(pref.teacherName)
+      );
+      const bHasPref = this.teacherPreferences.some(pref => 
+        b.staff.includes(pref.teacherName)
+      );
+      if (aHasPref && !bHasPref) return -1;
+      if (!aHasPref && bHasPref) return 1;
       
       // Then by teacher workload (ascending) - give priority to less busy teachers
       const aWorkload = this.teacherWorkload.get(a.staff) || 0;
@@ -231,7 +235,10 @@ export class TimetableGenerator {
     return subject.toLowerCase().includes('games') || 
            subject.toLowerCase().includes('sports') ||
            subject.toLowerCase().includes('physical education') ||
-           subject.toLowerCase().includes('pt');
+           subject.toLowerCase().includes('pt') ||
+           subject.toLowerCase().includes('aptitude') ||
+           subject.toLowerCase().includes('spd') ||
+           subject.toLowerCase().includes('nptel');
   }
 
   private getRemainingPeriods(subjectData: SubjectData): number {
@@ -241,98 +248,28 @@ export class TimetableGenerator {
     return allocation ? allocation.requiredPeriods - allocation.allocatedPeriods : 0;
   }
 
-  private isAllocationComplete(): boolean {
-    for (const allocation of this.subjectAllocations.values()) {
-      if (allocation.allocatedPeriods < allocation.requiredPeriods) {
-        return false;
-      }
-    }
-    return true;
-  }
+  private allocateConsecutivePeriods(subjectData: SubjectData, className: string): void {
+    const remainingPeriods = this.getRemainingPeriods(subjectData);
+    if (remainingPeriods <= 0) return;
 
-  private allocateSubjectCompletely(subjectData: SubjectData) {
-    const className = `${subjectData.department}-${subjectData.year}-${subjectData.section}`;
-    const subjectKey = `${subjectData.subject}-${className}`;
-    const allocation = this.subjectAllocations.get(subjectKey);
-    
-    if (!allocation) return;
-
-    const isLab = this.isLabSubject(subjectData.subject);
-    const isLibrary = this.isLibrarySubject(subjectData.subject);
-    const isGames = this.isGamesSubject(subjectData.subject);
-    const remainingPeriods = allocation.requiredPeriods - allocation.allocatedPeriods;
-    
-    if (isLab && remainingPeriods > 1) {
-      // For lab subjects, try to allocate consecutive periods
-      this.allocateConsecutivePeriods(subjectData, className, remainingPeriods);
-    } else if (isGames) {
-      // For games periods, allocate at last period
-      this.allocateGamesPeriods(subjectData, className);
-    } else if (isLibrary) {
-      // For library periods, ensure exclusivity
-      this.allocateLibraryPeriods(subjectData, className);
+    // Special handling for DSP labs - must be consecutive on same day
+    if (subjectData.subject.toLowerCase().includes('data structures') && 
+        subjectData.subject.toLowerCase().includes('python')) {
+      this.allocateDSPLabPeriods(subjectData, className, remainingPeriods);
     } else {
-      // For regular subjects, allocate individually with anti-repetition logic
-      while (allocation.allocatedPeriods < allocation.requiredPeriods) {
-        const slot = this.findBestSlotWithAntiRepetition(subjectData, className);
-        
-        if (slot) {
-          this.assignSlotWithTracking(slot, subjectData, className);
-          allocation.allocatedPeriods++;
-          
-          // Update teacher workload
-          const staffMembers = this.parseStaffMembers(subjectData.staff);
-          const primaryStaff = staffMembers[0] || subjectData.staff;
-          const currentWorkload = this.teacherWorkload.get(primaryStaff) || 0;
-          this.teacherWorkload.set(primaryStaff, currentWorkload + 1);
-        } else {
-          // If we can't find a slot, try relaxing constraints
-          const relaxedSlot = this.findSlotWithRelaxedConstraints(subjectData, className);
-          if (relaxedSlot) {
-            this.assignSlotWithTracking(relaxedSlot, subjectData, className);
-            allocation.allocatedPeriods++;
-            
-            const staffMembers = this.parseStaffMembers(subjectData.staff);
-            const primaryStaff = staffMembers[0] || subjectData.staff;
-            const currentWorkload = this.teacherWorkload.get(primaryStaff) || 0;
-            this.teacherWorkload.set(primaryStaff, currentWorkload + 1);
-          } else {
-            // Can't allocate this period, log and break
-            console.warn(`Could not allocate period for ${subjectData.subject} in ${className}. 
-              Allocated: ${allocation.allocatedPeriods}/${allocation.requiredPeriods}`);
-            break;
-          }
-        }
-      }
+      // Other labs should be on different days, but still consecutive periods
+      this.allocateOtherLabPeriods(subjectData, className, remainingPeriods);
     }
   }
 
-  private allocateConsecutivePeriods(subjectData: SubjectData, className: string, remainingPeriods: number) {
-    const allocation = this.subjectAllocations.get(`${subjectData.subject}-${className}`);
-    if (!allocation) return;
-
+  private allocateDSPLabPeriods(subjectData: SubjectData, className: string, remainingPeriods: number): void {
+    console.log(`🔬 Allocating ${remainingPeriods} DSP lab periods for ${subjectData.subject} in ${className} with staff: "${subjectData.staff}"`);
+    
     const staffMembers = this.parseStaffMembers(subjectData.staff);
-    console.log(`🔬 Allocating ${remainingPeriods} lab periods for ${subjectData.subject} in ${className} with staff: ${staffMembers.join(', ')}`);
-    
-    const isDSPLab = subjectData.subject.toLowerCase().includes('dsp') || 
-                     subjectData.subject.toLowerCase().includes('data structures');
-    
-    if (isDSPLab) {
-      // For DSP labs, allocate all periods consecutively on the same day
-      this.allocateDSPLabPeriods(subjectData, className, remainingPeriods, staffMembers);
-    } else {
-      // For other labs, allocate on different days
-      this.allocateOtherLabPeriods(subjectData, className, remainingPeriods, staffMembers);
-    }
-    
-    console.log(`📊 Lab allocation complete for ${subjectData.subject}: ${allocation.allocatedPeriods}/${allocation.requiredPeriods} periods allocated`);
-  }
+    const subjectKey = `${subjectData.subject}-${className}`;
+    const allocation = this.subjectAllocations.get(subjectKey)!;
 
-  private allocateDSPLabPeriods(subjectData: SubjectData, className: string, remainingPeriods: number, staffMembers: string[]) {
-    const allocation = this.subjectAllocations.get(`${subjectData.subject}-${className}`);
-    if (!allocation) return;
-
-    // Try to find a day with enough consecutive slots
+    // Try to find consecutive periods on the same day
     for (let day = 0; day < 6; day++) {
       let consecutiveFound = 0;
       let startPeriod = -1;
@@ -378,538 +315,318 @@ export class TimetableGenerator {
     console.error(`❌ Could not allocate ${remainingPeriods} consecutive DSP lab periods for ${subjectData.subject} in ${className}`);
   }
 
-  private allocateOtherLabPeriods(subjectData: SubjectData, className: string, remainingPeriods: number, staffMembers: string[]) {
-    const allocation = this.subjectAllocations.get(`${subjectData.subject}-${className}`);
-    if (!allocation) return;
-
-    // For non-DSP labs, allocate in blocks on different days
-    const usedDays = new Set<number>();
+  private allocateOtherLabPeriods(subjectData: SubjectData, className: string, remainingPeriods: number): void {
+    console.log(`🔬 Allocating ${remainingPeriods} lab periods for ${subjectData.subject} in ${className} with staff: "${subjectData.staff}"`);
     
-    while (remainingPeriods > 0) {
-      const blockSize = Math.min(remainingPeriods, 3); // Max 3 consecutive periods per block
-      let blockAllocated = false;
+    const staffMembers = this.parseStaffMembers(subjectData.staff);
+    const subjectKey = `${subjectData.subject}-${className}`;
+    const allocation = this.subjectAllocations.get(subjectKey)!;
+
+    // For other labs, try to allocate consecutive periods but on different days if possible
+    let periodsAllocated = 0;
+    const usedDays = new Set<number>();
+
+    for (let day = 0; day < 6 && periodsAllocated < remainingPeriods; day++) {
+      // Skip if this day already has a lab for this class
+      if (this.hasLabOnDay(className, day)) continue;
+
+      let consecutiveFound = 0;
+      let startPeriod = -1;
       
-      // Try each day (avoid days already used for this lab)
-      for (let day = 0; day < 6 && !blockAllocated; day++) {
-        if (usedDays.has(day)) continue; // Skip days already used for this lab
+      // Find consecutive periods on this day
+      for (let period = 0; period < this.scheduleSettings.totalPeriodsPerDay && periodsAllocated < remainingPeriods; period++) {
+        // Skip lunch and break periods
+        if (period + 1 === this.scheduleSettings.lunchPeriod || 
+            this.scheduleSettings.breakPeriods.includes(period + 1)) {
+          consecutiveFound = 0;
+          startPeriod = -1;
+          continue;
+        }
         
-        // Try different starting periods for consecutive allocation
-        for (let startPeriod = 0; startPeriod <= this.scheduleSettings.totalPeriodsPerDay - blockSize; startPeriod++) {
-          // Skip if starting period is lunch or break
-          if (startPeriod + 1 === this.scheduleSettings.lunchPeriod || 
-              this.scheduleSettings.breakPeriods.includes(startPeriod + 1)) {
-            continue;
-          }
+        if (this.isLabSlotAvailable(day, period, className, subjectData.staff)) {
+          if (startPeriod === -1) startPeriod = period;
+          consecutiveFound++;
           
-          // Check if we can place a block of consecutive periods
-          let canPlaceBlock = true;
-          const consecutiveSlots: { day: number, period: number }[] = [];
-          
-          for (let i = 0; i < blockSize; i++) {
-            const period = startPeriod + i;
-            
-            // Skip lunch and break periods within the block
-            if (period + 1 === this.scheduleSettings.lunchPeriod || 
-                this.scheduleSettings.breakPeriods.includes(period + 1)) {
-              canPlaceBlock = false;
-              break;
-            }
-            
-            // Check if all staff members are available for this slot
-            if (!this.isLabSlotAvailable(day, period, className, subjectData.staff)) {
-              canPlaceBlock = false;
-              break;
-            }
-              
-            consecutiveSlots.push({ day, period });
-          }
-          
-          if (canPlaceBlock) {
-            // Allocate this block
-            for (const slot of consecutiveSlots) {
+          // Allocate as many consecutive periods as possible on this day
+          const periodsToAllocate = Math.min(consecutiveFound, remainingPeriods - periodsAllocated);
+          if (periodsToAllocate >= 2) { // Minimum 2 periods for lab
+            for (let i = 0; i < periodsToAllocate; i++) {
+              const slot = { day, period: startPeriod + i };
               this.assignLabSlotWithTracking(slot, subjectData, className);
               allocation.allocatedPeriods++;
-              
-              // Ensure all 3 staff members get their workload allocated
-              staffMembers.forEach(staff => {
-                const currentWorkload = this.teacherWorkload.get(staff.trim()) || 0;
-                this.teacherWorkload.set(staff.trim(), currentWorkload + 1);
-              });
+              periodsAllocated++;
             }
             
-            usedDays.add(day); // Mark this day as used
-            console.log(`✅ Allocated ${blockSize} consecutive lab periods for ${subjectData.subject} in ${className} on ${this.getDayName(day)} periods ${startPeriod + 1}-${startPeriod + blockSize}`);
-            remainingPeriods -= blockSize;
-            blockAllocated = true;
-            break;
+            console.log(`✅ Allocated ${periodsToAllocate} consecutive lab periods for ${subjectData.subject} in ${className} on ${this.getDayName(day)} periods ${startPeriod + 1}-${startPeriod + periodsToAllocate}`);
+            usedDays.add(day);
+            break; // Move to next day
           }
+        } else {
+          consecutiveFound = 0;
+          startPeriod = -1;
         }
       }
-      
-      if (!blockAllocated) {
-        console.error(`❌ Could not allocate remaining ${remainingPeriods} lab periods for ${subjectData.subject} in ${className}`);
-        break;
-      }
     }
-  }
-
-  private reportAllocationStatus() {
-    console.log('\n=== ALLOCATION REPORT ===');
-    let totalRequired = 0;
-    let totalAllocated = 0;
-    let unallocatedSubjects: string[] = [];
-
-    this.subjectAllocations.forEach((allocation, subjectKey) => {
-      totalRequired += allocation.requiredPeriods;
-      totalAllocated += allocation.allocatedPeriods;
-      
-      if (allocation.allocatedPeriods < allocation.requiredPeriods) {
-        const shortfall = allocation.requiredPeriods - allocation.allocatedPeriods;
-        unallocatedSubjects.push(`${subjectKey}: ${shortfall} periods short`);
-      }
-    });
-
-    console.log(`Total periods required: ${totalRequired}`);
-    console.log(`Total periods allocated: ${totalAllocated}`);
-    console.log(`Allocation success rate: ${((totalAllocated / totalRequired) * 100).toFixed(1)}%`);
     
-    if (unallocatedSubjects.length > 0) {
-      console.log('Unallocated periods:');
-      unallocatedSubjects.forEach(subject => console.log(`  - ${subject}`));
-    } else {
-      console.log('✅ ALL PERIODS SUCCESSFULLY ALLOCATED!');
+    if (periodsAllocated < remainingPeriods) {
+      console.error(`❌ Could not allocate remaining ${remainingPeriods - periodsAllocated} lab periods for ${subjectData.subject} in ${className}`);
     }
-  }
-
-  private findBestSlot(subjectData: SubjectData, className: string): { day: number, period: number } | null {
-    const staffMembers = this.parseStaffMembers(subjectData.staff);
-    const primaryStaff = staffMembers[0] || subjectData.staff;
     
-    const teacherPreference = this.teacherPreferences.find(
-      pref => pref.teacherName === primaryStaff && 
-               (!pref.className || pref.className === className)
-    );
-
-    // Check if teacher has exceeded max periods per week
-    const currentWorkload = this.teacherWorkload.get(subjectData.staff) || 0;
-    if (currentWorkload >= this.scheduleSettings.maxTeacherPeriodsPerWeek) {
-      return null;
-    }
-
-    // Priority 1: Try preferred slots first (both subject and teacher preferences)
-    const preferredSlots = this.getPreferredSlots(subjectData, teacherPreference);
-    for (const slot of preferredSlots) {
-      if (this.isSlotAvailable(slot.day, slot.period, className, subjectData.staff)) {
-        return slot;
-      }
-    }
-
-    // Priority 2: Find best available slot using smart distribution
-    return this.findOptimalSlot(className, subjectData.staff);
+    console.log(`📊 Lab allocation complete for ${subjectData.subject}: ${periodsAllocated}/${remainingPeriods} periods allocated`);
   }
 
-  private getPreferredSlots(subjectData: SubjectData, teacherPreference?: TeacherPreference): { day: number, period: number }[] {
-    const slots: { day: number, period: number }[] = [];
-    
-    // Subject preferred day/period
-    if (subjectData.preferredDay && subjectData.preferredPeriod) {
-      const dayIndex = this.getDayIndex(subjectData.preferredDay);
-      if (dayIndex !== -1) {
-        slots.push({ day: dayIndex, period: subjectData.preferredPeriod - 1 });
-      }
-    }
-
-    // Teacher preferred day/period
-    if (teacherPreference) {
-      const dayIndex = this.getDayIndex(teacherPreference.preferredDay);
-      if (dayIndex !== -1) {
-        slots.push({ day: dayIndex, period: teacherPreference.preferredPeriod - 1 });
-      }
-    }
-
-    return slots;
-  }
-
-  private findOptimalSlot(className: string, teacher: string): { day: number, period: number } | null {
-    const availableSlots: { day: number, period: number, score: number }[] = [];
-
-    // Score all available slots
-    for (let day = 0; day < 6; day++) {
-      for (let period = 0; period < this.scheduleSettings.totalPeriodsPerDay; period++) {
-        // Skip lunch and break periods
-        if (period + 1 === this.scheduleSettings.lunchPeriod || 
-            this.scheduleSettings.breakPeriods.includes(period + 1)) {
-          continue;
-        }
-
-        if (this.isSlotAvailable(day, period, className, teacher)) {
-          const score = this.calculateSlotScore(day, period, className, teacher);
-          availableSlots.push({ day, period, score });
-        }
-      }
-    }
-
-    // Sort by score (higher is better) and return the best slot
-    availableSlots.sort((a, b) => b.score - a.score);
-    return availableSlots.length > 0 ? { day: availableSlots[0].day, period: availableSlots[0].period } : null;
-  }
-
-  private calculateSlotScore(day: number, period: number, className: string, teacher: string): number {
-    let score = 100; // Base score
-
-    // Prefer earlier periods (morning classes are generally better)
-    score += (10 - period) * 5;
-
-    // Prefer spreading subjects across different days
-    const classSchedule = this.classTimetables.get(className);
-    if (classSchedule) {
-      const daySubjects = classSchedule[day].filter(slot => slot.subject).length;
-      score -= daySubjects * 10; // Penalty for overcrowded days
-    }
-
-    // Prefer spreading teacher's classes across different days
-    const teacherSchedule = this.teacherTimetables.get(teacher);
-    if (teacherSchedule) {
-      const teacherDayClasses = teacherSchedule[day].filter(slot => slot.subject).length;
-      score -= teacherDayClasses * 8; // Penalty for teacher overcrowding
-    }
-
-    // Avoid back-to-back periods for the same teacher if possible
-    if (teacherSchedule && period > 0) {
-      const prevSlot = teacherSchedule[day][period - 1];
-      if (prevSlot.subject) score -= 15;
-    }
-
-    if (teacherSchedule && period < this.scheduleSettings.totalPeriodsPerDay - 1) {
-      const nextSlot = teacherSchedule[day][period + 1];
-      if (nextSlot.subject) score -= 15;
-    }
-
-    return score;
-  }
-
-  private findSlotWithRelaxedConstraints(subjectData: SubjectData, className: string): { day: number, period: number } | null {
-    // Relax teacher workload constraint if needed
-    const availableSlots: { day: number, period: number }[] = [];
-
-    for (let day = 0; day < 6; day++) {
-      for (let period = 0; period < this.scheduleSettings.totalPeriodsPerDay; period++) {
-        // Skip lunch and break periods
-        if (period + 1 === this.scheduleSettings.lunchPeriod || 
-            this.scheduleSettings.breakPeriods.includes(period + 1)) {
-          continue;
-        }
-
-        // Only check basic availability (class and teacher slot free)
-        if (this.isSlotAvailableBasic(day, period, className, subjectData.staff)) {
-          availableSlots.push({ day, period });
-        }
-      }
-    }
-
-    // Return first available slot
-    return availableSlots.length > 0 ? availableSlots[0] : null;
-  }
-
-  private isSlotAvailableBasic(day: number, period: number, className: string, teacher: string): boolean {
-    const classSchedule = this.classTimetables.get(className);
-    const teacherSchedule = this.teacherTimetables.get(teacher);
-    
-    if (!classSchedule || !teacherSchedule) return false;
-
-    // Check if class slot is free
-    const classSlot = classSchedule[day][period];
-    if (classSlot.subject) return false;
-
-    // Check if teacher slot is free
-    const teacherSlot = teacherSchedule[day][period];
-    if (teacherSlot.subject) return false;
-
-    return true;
-  }
-
-  private isSlotAvailable(day: number, period: number, className: string, teacher: string): boolean {
-    const classSchedule = this.classTimetables.get(className);
-    const teacherSchedule = this.teacherTimetables.get(teacher);
-    
-    if (!classSchedule || !teacherSchedule) return false;
-
-    // Check if class slot is free
-    const classSlot = classSchedule[day][period];
-    if (classSlot.subject) return false;
-
-    // Check if teacher slot is free
-    const teacherSlot = teacherSchedule[day][period];
-    if (teacherSlot.subject) return false;
-
-    return true;
-  }
-
-  private findBestSlotWithAntiRepetition(subjectData: SubjectData, className: string): { day: number, period: number } | null {
-    const staffMembers = this.parseStaffMembers(subjectData.staff);
-    const primaryStaff = staffMembers[0] || subjectData.staff;
-    
-    // Find teacher preference that matches both teacher name and class (if specified)
-    const teacherPreference = this.teacherPreferences.find(
-      pref => pref.teacherName === primaryStaff && 
-               (!pref.className || pref.className === className)
-    );
-
-    // Check if primary teacher has exceeded max periods per week
-    const currentWorkload = this.teacherWorkload.get(primaryStaff) || 0;
-    if (currentWorkload >= this.scheduleSettings.maxTeacherPeriodsPerWeek) {
-      return null;
-    }
-
-    // Get periods already used by this subject-class combination (to prevent repetition across days)
-    const subjectClassKey = `${subjectData.subject}-${className}`;
-    const usedPeriods = this.subjectPeriodUsage.get(subjectClassKey) || new Set();
-
-    // Priority 1: Try preferred slots first that don't use already used periods
-    const preferredSlots = this.getPreferredSlots(subjectData, teacherPreference);
-    for (const slot of preferredSlots) {
-      if (!usedPeriods.has(slot.period + 1) && this.isSlotAvailableForAllStaff(slot.day, slot.period, className, staffMembers)) {
-        return slot;
-      }
-    }
-
-    // Priority 2: Find best available slot that avoids period repetition
-    return this.findOptimalSlotWithAntiRepetition(className, primaryStaff, subjectClassKey, staffMembers);
-  }
-
-  private findOptimalSlotWithAntiRepetition(className: string, teacher: string, subjectClassKey: string, allStaffMembers?: string[]): { day: number, period: number } | null {
-    const availableSlots: { day: number, period: number, score: number }[] = [];
-    const usedPeriods = this.subjectPeriodUsage.get(subjectClassKey) || new Set();
-
-    // Score all available slots
-    for (let day = 0; day < 6; day++) {
-      for (let period = 0; period < this.scheduleSettings.totalPeriodsPerDay; period++) {
-        // Skip lunch and break periods
-        if (period + 1 === this.scheduleSettings.lunchPeriod || 
-            this.scheduleSettings.breakPeriods.includes(period + 1)) {
-          continue;
-        }
-
-        const periodNumber = period + 1;
-        
-        // Skip periods already used by this subject-class combination (anti-repetition across days)
-        if (usedPeriods.has(periodNumber)) {
-          continue;
-        }
-
-        const staffToCheck = allStaffMembers || [teacher];
-        if (this.isSlotAvailableForAllStaff(day, period, className, staffToCheck)) {
-          let score = this.calculateSlotScore(day, period, className, teacher);
-          
-          // Bonus for avoiding period repetition across days
-          score += 100;
-          
-          availableSlots.push({ day, period, score });
-        }
-      }
-    }
-
-    // Sort by score (higher is better) and return the best slot
-    availableSlots.sort((a, b) => b.score - a.score);
-    return availableSlots.length > 0 ? { day: availableSlots[0].day, period: availableSlots[0].period } : null;
-  }
-
-  private assignSlotWithTracking(slot: { day: number, period: number }, subjectData: SubjectData, className: string) {
-    const classSchedule = this.classTimetables.get(className);
-    if (!classSchedule) return;
-
-    const staffMembers = this.parseStaffMembers(subjectData.staff);
-    
-    const timeSlot: TimeSlot = {
-      day: this.getDayName(slot.day),
-      period: slot.period + 1,
-      subject: subjectData.subject,
-      staff: subjectData.staff,
-      className
-    };
-
-    // Assign to class timetable
-    classSchedule[slot.day][slot.period] = { ...timeSlot };
-
-    // Assign to all staff members' timetables
-    staffMembers.forEach(staff => {
-      const teacherSchedule = this.teacherTimetables.get(staff.trim());
-      if (teacherSchedule) {
-        const teacherTimeSlot: TimeSlot = {
-          day: this.getDayName(slot.day),
-          period: slot.period + 1,
-          subject: subjectData.subject,
-          staff: staff.trim(),
-          className
-        };
-        teacherSchedule[slot.day][slot.period] = { ...teacherTimeSlot };
-      }
-    });
-
-    // Track period usage for this subject-class combination (anti-repetition across days)
-    const periodNumber = slot.period + 1;
-    const subjectClassKey = `${subjectData.subject}-${className}`;
-    const usedPeriods = this.subjectPeriodUsage.get(subjectClassKey) || new Set();
-    usedPeriods.add(periodNumber);
-    this.subjectPeriodUsage.set(subjectClassKey, usedPeriods);
-  }
-
-  private isSlotAvailableForAllStaff(day: number, period: number, className: string, staffMembers: string[]): boolean {
+  private hasLabOnDay(className: string, day: number): boolean {
     const classSchedule = this.classTimetables.get(className);
     if (!classSchedule) return false;
-
-    // Check if class slot is free
-    const classSlot = classSchedule[day][period];
-    if (classSlot.subject) return false;
-
-    // Check if all staff members are available
-    for (const staff of staffMembers) {
-      const teacherSchedule = this.teacherTimetables.get(staff.trim());
-      if (!teacherSchedule) continue;
-
-      const teacherSlot = teacherSchedule[day][period];
-      if (teacherSlot.subject) return false;
-    }
-
-    return true;
+    
+    return classSchedule[day].some(slot => 
+      slot.subject && this.isLabSubject(slot.subject)
+    );
   }
 
   private isLabSlotAvailable(day: number, period: number, className: string, staffString: string): boolean {
+    const classSchedule = this.classTimetables.get(className);
+    if (!classSchedule || classSchedule[day][period].subject) return false;
+
+    // Check if there's already another lab on this day for this class (except for DSP labs which can be on same day)
+    const daySchedule = classSchedule[day];
+    const hasLabToday = daySchedule.some(slot => slot.subject && this.isLabSubject(slot.subject));
+    
+    // Allow DSP labs to be on same day, but not other labs
+    const isDSPLab = staffString.toLowerCase().includes('data structures') && 
+                     staffString.toLowerCase().includes('python');
+    if (hasLabToday && !isDSPLab) return false;
+
     const staffMembers = this.parseStaffMembers(staffString);
-    return this.isSlotAvailableForAllStaff(day, period, className, staffMembers);
+    
+    // Check if ALL staff members are available for the entire lab duration
+    for (const staff of staffMembers) {
+      const teacherSchedule = this.teacherTimetables.get(staff.trim());
+      if (!teacherSchedule || teacherSchedule[day][period].subject) {
+        return false;
+      }
+    }
+    
+    return true;
   }
 
-  private assignLabSlotWithTracking(slot: { day: number, period: number }, subjectData: SubjectData, className: string) {
-    const classSchedule = this.classTimetables.get(className);
-    if (!classSchedule) return;
-
+  private assignLabSlotWithTracking(slot: { day: number; period: number }, subjectData: SubjectData, className: string): void {
+    const { day, period } = slot;
     const staffMembers = this.parseStaffMembers(subjectData.staff);
+    
+    // Assign to class timetable - show all 3 staff members
+    const classSchedule = this.classTimetables.get(className);
+    if (classSchedule) {
+      classSchedule[day][period].subject = subjectData.subject;
+      classSchedule[day][period].staff = staffMembers.join(', '); // Show all staff members
+      classSchedule[day][period].className = className;
+    }
 
-    const timeSlot: TimeSlot = {
-      day: this.getDayName(slot.day),
-      period: slot.period + 1,
-      subject: subjectData.subject,
-      staff: subjectData.staff, // Keep the original staff string with all names
-      className
-    };
-
-    // Assign to class timetable
-    classSchedule[slot.day][slot.period] = { ...timeSlot };
-
-    // Assign to each staff member's timetable
+    // Assign to each individual teacher's timetable and block them from other assignments
     staffMembers.forEach(staff => {
       const teacherSchedule = this.teacherTimetables.get(staff.trim());
       if (teacherSchedule) {
-        const teacherTimeSlot: TimeSlot = {
-          day: this.getDayName(slot.day),
-          period: slot.period + 1,
-          subject: subjectData.subject,
-          staff: staff.trim(),
-          className
-        };
-        teacherSchedule[slot.day][slot.period] = { ...teacherTimeSlot };
+        teacherSchedule[day][period].subject = subjectData.subject;
+        teacherSchedule[day][period].staff = staff.trim();
+        teacherSchedule[day][period].className = className;
       }
     });
-
-    // Track period usage for this subject-class combination (anti-repetition across days)
-    const periodNumber = slot.period + 1;
-    const subjectClassKey = `${subjectData.subject}-${className}`;
-    const usedPeriods = this.subjectPeriodUsage.get(subjectClassKey) || new Set();
-    usedPeriods.add(periodNumber);
-    this.subjectPeriodUsage.set(subjectClassKey, usedPeriods);
   }
 
-  private allocateGamesPeriods(subjectData: SubjectData, className: string) {
-    const allocation = this.subjectAllocations.get(`${subjectData.subject}-${className}`);
-    if (!allocation) return;
+  private allocateLibraryPeriods(subjectData: SubjectData, className: string): void {
+    const remainingPeriods = this.getRemainingPeriods(subjectData);
+    if (remainingPeriods <= 0) return;
 
-    const staffMembers = this.parseStaffMembers(subjectData.staff);
-    
-    // Try to allocate games periods at the last period of each day
-    for (let day = 0; day < 6 && allocation.allocatedPeriods < allocation.requiredPeriods; day++) {
-      const lastPeriod = this.scheduleSettings.totalPeriodsPerDay - 1;
+    const subjectKey = `${subjectData.subject}-${className}`;
+    const allocation = this.subjectAllocations.get(subjectKey)!;
+
+    // Try to allocate library periods in later periods of the day
+    for (let period = Math.floor(this.scheduleSettings.totalPeriodsPerDay * 0.7); 
+         period < this.scheduleSettings.totalPeriodsPerDay && allocation.allocatedPeriods < allocation.requiredPeriods; 
+         period++) {
       
-      if (this.isSlotAvailableForAllStaff(day, lastPeriod, className, staffMembers)) {
-        const slot = { day, period: lastPeriod };
-        this.assignSlotWithTracking(slot, subjectData, className);
+      // Skip lunch and break periods
+      if (period + 1 === this.scheduleSettings.lunchPeriod || 
+          this.scheduleSettings.breakPeriods.includes(period + 1)) continue;
+
+      for (let day = 0; day < 6 && allocation.allocatedPeriods < allocation.requiredPeriods; day++) {
+        if (this.isSlotAvailable(day, period, className, subjectData.staff)) {
+          this.assignSlotWithTracking(day, period, subjectData, className);
+          allocation.allocatedPeriods++;
+          
+          console.log(`✅ Allocated library period for ${subjectData.subject} in ${className} on ${this.getDayName(day)} period ${period + 1}`);
+        }
+      }
+    }
+  }
+
+  private allocateGamesPeriods(subjectData: SubjectData, className: string): void {
+    const remainingPeriods = this.getRemainingPeriods(subjectData);
+    if (remainingPeriods <= 0) return;
+
+    const subjectKey = `${subjectData.subject}-${className}`;
+    const allocation = this.subjectAllocations.get(subjectKey)!;
+
+    // Try to allocate games periods in the last period of the day
+    const lastPeriod = this.scheduleSettings.totalPeriodsPerDay - 1;
+    
+    for (let day = 0; day < 6 && allocation.allocatedPeriods < allocation.requiredPeriods; day++) {
+      if (this.isSlotAvailable(day, lastPeriod, className, subjectData.staff)) {
+        this.assignSlotWithTracking(day, lastPeriod, subjectData, className);
         allocation.allocatedPeriods++;
-        
-        staffMembers.forEach(staff => {
-          const currentWorkload = this.teacherWorkload.get(staff.trim()) || 0;
-          this.teacherWorkload.set(staff.trim(), currentWorkload + 1);
-        });
         
         console.log(`✅ Allocated games period for ${subjectData.subject} in ${className} on ${this.getDayName(day)} last period`);
       }
     }
-  }
 
-  private allocateLibraryPeriods(subjectData: SubjectData, className: string) {
-    const allocation = this.subjectAllocations.get(`${subjectData.subject}-${className}`);
-    if (!allocation) return;
+    // If we still need to allocate more, try other periods
+    if (allocation.allocatedPeriods < allocation.requiredPeriods) {
+      for (let period = Math.floor(this.scheduleSettings.totalPeriodsPerDay * 0.8); 
+           period < this.scheduleSettings.totalPeriodsPerDay && allocation.allocatedPeriods < allocation.requiredPeriods; 
+           period++) {
+        
+        // Skip lunch and break periods and the last period (already tried)
+        if (period + 1 === this.scheduleSettings.lunchPeriod || 
+            this.scheduleSettings.breakPeriods.includes(period + 1) ||
+            period === lastPeriod) continue;
 
-    const staffMembers = this.parseStaffMembers(subjectData.staff);
-    
-    // For library periods, ensure only one class can use the library at a time
-    while (allocation.allocatedPeriods < allocation.requiredPeriods) {
-      let allocated = false;
-      
-      for (let day = 0; day < 6 && !allocated; day++) {
-        for (let period = 0; period < this.scheduleSettings.totalPeriodsPerDay && !allocated; period++) {
-          // Skip lunch and break periods
-          if (period + 1 === this.scheduleSettings.lunchPeriod || 
-              this.scheduleSettings.breakPeriods.includes(period + 1)) {
-            continue;
-          }
-          
-          const slotKey = `${day}-${period}`;
-          
-          // Check if library is free and staff is available
-          if (!this.libraryOccupancy.has(slotKey) && 
-              this.isSlotAvailableForAllStaff(day, period, className, staffMembers)) {
-            
-            const slot = { day, period };
-            this.assignSlotWithTracking(slot, subjectData, className);
-            this.libraryOccupancy.set(slotKey, className);
+        for (let day = 0; day < 6 && allocation.allocatedPeriods < allocation.requiredPeriods; day++) {
+          if (this.isSlotAvailable(day, period, className, subjectData.staff)) {
+            this.assignSlotWithTracking(day, period, subjectData, className);
             allocation.allocatedPeriods++;
-            allocated = true;
             
-            staffMembers.forEach(staff => {
-              const currentWorkload = this.teacherWorkload.get(staff.trim()) || 0;
-              this.teacherWorkload.set(staff.trim(), currentWorkload + 1);
-            });
-            
-            console.log(`✅ Allocated library period for ${subjectData.subject} in ${className} on ${this.getDayName(day)} period ${period + 1}`);
+            console.log(`✅ Allocated games period for ${subjectData.subject} in ${className} on ${this.getDayName(day)} period ${period + 1}`);
           }
         }
-      }
-      
-      if (!allocated) {
-        console.warn(`Could not allocate library period for ${subjectData.subject} in ${className}`);
-        break;
       }
     }
   }
 
-  private assignSlot(slot: { day: number, period: number }, subjectData: SubjectData, className: string) {
+  private allocateRegularPeriods(subjectData: SubjectData, className: string): void {
+    const remainingPeriods = this.getRemainingPeriods(subjectData);
+    if (remainingPeriods <= 0) return;
+
+    const subjectKey = `${subjectData.subject}-${className}`;
+    const allocation = this.subjectAllocations.get(subjectKey)!;
+
+    // Try to respect teacher preferences first
+    const teacherPref = this.teacherPreferences.find(pref => 
+      subjectData.staff.includes(pref.teacherName)
+    );
+
+    if (teacherPref) {
+      const prefDay = this.getDayIndex(teacherPref.preferredDay);
+      const prefPeriod = teacherPref.preferredPeriod - 1;
+      
+      if (prefDay >= 0 && prefPeriod >= 0 && 
+          this.isSlotAvailable(prefDay, prefPeriod, className, subjectData.staff)) {
+        this.assignSlotWithTracking(prefDay, prefPeriod, subjectData, className);
+        allocation.allocatedPeriods++;
+      }
+    }
+
+    // Fill remaining periods using anti-repetition strategy
+    while (allocation.allocatedPeriods < allocation.requiredPeriods) {
+      let allocated = false;
+      
+      // Try to find a slot that doesn't create consecutive periods of the same subject
+      for (let day = 0; day < 6 && !allocated; day++) {
+        for (let period = 0; period < this.scheduleSettings.totalPeriodsPerDay && !allocated; period++) {
+          // Skip lunch and break periods
+          if (period + 1 === this.scheduleSettings.lunchPeriod || 
+              this.scheduleSettings.breakPeriods.includes(period + 1)) continue;
+
+          if (this.isSlotAvailable(day, period, className, subjectData.staff) &&
+              !this.wouldCreateRepetition(day, period, className, subjectData.subject)) {
+            this.assignSlotWithTracking(day, period, subjectData, className);
+            allocation.allocatedPeriods++;
+            allocated = true;
+          }
+        }
+      }
+      
+      // If no non-repetitive slot found, use any available slot
+      if (!allocated) {
+        for (let day = 0; day < 6 && !allocated; day++) {
+          for (let period = 0; period < this.scheduleSettings.totalPeriodsPerDay && !allocated; period++) {
+            // Skip lunch and break periods
+            if (period + 1 === this.scheduleSettings.lunchPeriod || 
+                this.scheduleSettings.breakPeriods.includes(period + 1)) continue;
+
+            if (this.isSlotAvailable(day, period, className, subjectData.staff)) {
+              this.assignSlotWithTracking(day, period, subjectData, className);
+              allocation.allocatedPeriods++;
+              allocated = true;
+            }
+          }
+        }
+      }
+      
+      // Break if we couldn't allocate any more periods
+      if (!allocated) break;
+    }
+  }
+
+  private isSlotAvailable(day: number, period: number, className: string, staffString: string): boolean {
+    // Check class availability
     const classSchedule = this.classTimetables.get(className);
-    const teacherSchedule = this.teacherTimetables.get(subjectData.staff);
+    if (!classSchedule || classSchedule[day][period].subject) return false;
+
+    // Check teacher availability
+    const staffMembers = this.parseStaffMembers(staffString);
+    for (const staff of staffMembers) {
+      const teacherSchedule = this.teacherTimetables.get(staff.trim());
+      if (!teacherSchedule || teacherSchedule[day][period].subject) {
+        return false;
+      }
+      
+      // Check if teacher is within maximum periods per week
+      const currentWorkload = this.teacherWorkload.get(staff.trim()) || 0;
+      if (currentWorkload >= this.scheduleSettings.maxTeacherPeriodsPerWeek) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private assignSlotWithTracking(day: number, period: number, subjectData: SubjectData, className: string): void {
+    const staffMembers = this.parseStaffMembers(subjectData.staff);
     
-    if (!classSchedule || !teacherSchedule) return;
-
-    const timeSlot: TimeSlot = {
-      day: this.getDayName(slot.day),
-      period: slot.period + 1,
-      subject: subjectData.subject,
-      staff: subjectData.staff,
-      className
-    };
-
     // Assign to class timetable
-    classSchedule[slot.day][slot.period] = { ...timeSlot };
+    const classSchedule = this.classTimetables.get(className);
+    if (classSchedule) {
+      classSchedule[day][period].subject = subjectData.subject;
+      classSchedule[day][period].staff = subjectData.staff;
+      classSchedule[day][period].className = className;
+    }
 
-    // Assign to teacher timetable
-    teacherSchedule[slot.day][slot.period] = { ...timeSlot };
+    // Assign to teacher timetable and update workload
+    staffMembers.forEach(staff => {
+      const teacherSchedule = this.teacherTimetables.get(staff.trim());
+      if (teacherSchedule) {
+        teacherSchedule[day][period].subject = subjectData.subject;
+        teacherSchedule[day][period].staff = staff.trim();
+        teacherSchedule[day][period].className = className;
+      }
+      
+      // Update teacher workload
+      const currentWorkload = this.teacherWorkload.get(staff.trim()) || 0;
+      this.teacherWorkload.set(staff.trim(), currentWorkload + 1);
+    });
+  }
+
+  private wouldCreateRepetition(day: number, period: number, className: string, subject: string): boolean {
+    const classSchedule = this.classTimetables.get(className);
+    if (!classSchedule) return false;
+
+    const daySchedule = classSchedule[day];
+    
+    // Check adjacent periods
+    if (period > 0 && daySchedule[period - 1].subject === subject) return true;
+    if (period < daySchedule.length - 1 && daySchedule[period + 1].subject === subject) return true;
+    
+    return false;
   }
 
   private getDayIndex(dayName: string): number {
@@ -919,36 +636,76 @@ export class TimetableGenerator {
 
   private getDayName(dayIndex: number): string {
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[dayIndex];
+    return days[dayIndex] || 'Unknown';
   }
 
-  private getClassTimetables(): ClassTimetable[] {
-    const result: ClassTimetable[] = [];
-    
+  private isAllocationComplete(): boolean {
+    for (const allocation of this.subjectAllocations.values()) {
+      if (allocation.allocatedPeriods < allocation.requiredPeriods) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private getAllocationSummary(): any {
+    const total = this.subjectAllocations.size;
+    let completed = 0;
+    let totalRequired = 0;
+    let totalAllocated = 0;
+
+    this.subjectAllocations.forEach(allocation => {
+      totalRequired += allocation.requiredPeriods;
+      totalAllocated += allocation.allocatedPeriods;
+      if (allocation.allocatedPeriods >= allocation.requiredPeriods) {
+        completed++;
+      }
+    });
+
+    return {
+      completedSubjects: completed,
+      totalSubjects: total,
+      completionRate: `${Math.round((completed / total) * 100)}%`,
+      periodsAllocated: totalAllocated,
+      periodsRequired: totalRequired,
+      allocationRate: `${Math.round((totalAllocated / totalRequired) * 100)}%`
+    };
+  }
+
+  public getCurrentState(): {
+    subjectData: SubjectData[];
+    teacherPreferences: TeacherPreference[];
+    scheduleSettings: ScheduleSettings;
+    classTimetables: ClassTimetable[];
+    teacherTimetables: TeacherTimetable[];
+    subjectAllocations: Map<string, SubjectAllocation>;
+  } {
+    const classTimetables: ClassTimetable[] = [];
+    const teacherTimetables: TeacherTimetable[] = [];
+
     this.classTimetables.forEach((schedule, className) => {
-      result.push({
-        className,
-        schedule
-      });
+      classTimetables.push({ className, schedule });
     });
 
-    return result.sort((a, b) => a.className.localeCompare(b.className));
-  }
-
-  private getTeacherTimetables(): TeacherTimetable[] {
-    const result: TeacherTimetable[] = [];
-    
     this.teacherTimetables.forEach((schedule, teacherName) => {
-      result.push({
-        teacherName,
-        schedule
-      });
+      teacherTimetables.push({ teacherName, schedule });
     });
 
-    return result.sort((a, b) => a.teacherName.localeCompare(b.teacherName));
+    return {
+      subjectData: this.subjectData,
+      teacherPreferences: this.teacherPreferences,
+      scheduleSettings: this.scheduleSettings,
+      classTimetables,
+      teacherTimetables,
+      subjectAllocations: this.subjectAllocations
+    };
   }
 
-  public getSubjectAllocationReport(): SubjectAllocation[] {
-    return Array.from(this.subjectAllocations.values());
+  private calculateAllocationScore(): number {
+    let score = 0;
+    this.subjectAllocations.forEach(allocation => {
+      score += allocation.allocatedPeriods / allocation.requiredPeriods;
+    });
+    return score / this.subjectAllocations.size;
   }
 }
