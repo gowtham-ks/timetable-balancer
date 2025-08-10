@@ -96,8 +96,8 @@ export class TimetableGenerator {
     // Reset all allocations
     this.resetAllocations();
 
-    // Multiple passes to ensure all subjects get allocated
-    let maxAttempts = 5;
+    // Multiple passes to ensure all subjects get allocated - increased for better allocation
+    let maxAttempts = 15;
     let attempt = 0;
     
     while (attempt < maxAttempts && !this.isAllocationComplete()) {
@@ -307,128 +307,150 @@ export class TimetableGenerator {
     }
   }
 
-  private allocateConsecutivePeriods(subjectData: SubjectData, className: string, periodsNeeded: number) {
+  private allocateConsecutivePeriods(subjectData: SubjectData, className: string, remainingPeriods: number) {
     const allocation = this.subjectAllocations.get(`${subjectData.subject}-${className}`);
     if (!allocation) return;
 
     const staffMembers = this.parseStaffMembers(subjectData.staff);
+    console.log(`🔬 Allocating ${remainingPeriods} lab periods for ${subjectData.subject} in ${className} with staff: ${staffMembers.join(', ')}`);
     
-    // For lab periods, allocate all periods in continuous blocks on the same day
-    // Prioritize allocating all periods in one block if possible
-    let remainingPeriods = periodsNeeded;
+    const isDSPLab = subjectData.subject.toLowerCase().includes('dsp') || 
+                     subjectData.subject.toLowerCase().includes('data structures');
     
-    console.log(`🔬 Allocating lab periods for ${subjectData.subject} (${periodsNeeded} periods needed)`);
-    console.log(`Lab staff: ${staffMembers.join(', ')}`);
-
-    // Try to allocate all periods in one continuous block first
-    for (let day = 0; day < 6 && remainingPeriods > 0; day++) {
-      // Try different starting periods to find the best continuous block
-      for (let startPeriod = 0; startPeriod <= this.scheduleSettings.totalPeriodsPerDay - remainingPeriods; startPeriod++) {
-        let canPlaceAllPeriods = true;
-        const consecutiveSlots: { day: number, period: number }[] = [];
-        
-        // Check if we can place all remaining periods consecutively from this starting point
-        for (let i = 0; i < remainingPeriods; i++) {
-          const period = startPeriod + i;
-          
-          // Skip if this is a break/lunch period
-          if (period + 1 === this.scheduleSettings.lunchPeriod || 
-              this.scheduleSettings.breakPeriods.includes(period + 1)) {
-            canPlaceAllPeriods = false;
-            break;
-          }
-          
-          // Check if all lab staff members are available for this slot
-          if (!this.isSlotAvailableForAllStaff(day, period, className, staffMembers)) {
-            canPlaceAllPeriods = false;
-            break;
-          }
-          
-          consecutiveSlots.push({ day, period });
-        }
-        
-        if (canPlaceAllPeriods) {
-          // Allocate all consecutive periods
-          for (const slot of consecutiveSlots) {
-            this.assignLabSlotWithTracking(slot, subjectData, className);
-            allocation.allocatedPeriods++;
-            
-            // Update workload for all lab staff members
-            staffMembers.forEach(staff => {
-              const currentWorkload = this.teacherWorkload.get(staff.trim()) || 0;
-              this.teacherWorkload.set(staff.trim(), currentWorkload + 1);
-            });
-          }
-          
-          console.log(`✅ Allocated ${remainingPeriods} consecutive lab periods for ${subjectData.subject} in ${className} on ${this.getDayName(day)} periods ${startPeriod + 1}-${startPeriod + remainingPeriods}`);
-          remainingPeriods = 0;
-          break;
-        }
-      }
-      
-      if (remainingPeriods === 0) break;
-    }
-    
-    // If we couldn't allocate all periods in one block, try smaller consecutive blocks
-    if (remainingPeriods > 0) {
-      console.warn(`⚠️  Couldn't allocate all lab periods in one block. Trying smaller blocks for ${subjectData.subject}`);
-      
-      while (remainingPeriods > 0) {
-        const blockSize = Math.min(3, remainingPeriods); // Try blocks of up to 3 periods
-        let blockAllocated = false;
-        
-        for (let day = 0; day < 6 && !blockAllocated; day++) {
-          for (let startPeriod = 0; startPeriod <= this.scheduleSettings.totalPeriodsPerDay - blockSize; startPeriod++) {
-            let canPlaceBlock = true;
-            const consecutiveSlots: { day: number, period: number }[] = [];
-            
-            for (let i = 0; i < blockSize; i++) {
-              const period = startPeriod + i;
-              
-              // Skip if this is a break/lunch period
-              if (period + 1 === this.scheduleSettings.lunchPeriod || 
-                  this.scheduleSettings.breakPeriods.includes(period + 1)) {
-                canPlaceBlock = false;
-                break;
-              }
-              
-              // Check if all lab staff members are available
-              if (!this.isSlotAvailableForAllStaff(day, period, className, staffMembers)) {
-                canPlaceBlock = false;
-                break;
-              }
-              
-              consecutiveSlots.push({ day, period });
-            }
-            
-            if (canPlaceBlock) {
-              // Allocate this block
-              for (const slot of consecutiveSlots) {
-                this.assignLabSlotWithTracking(slot, subjectData, className);
-                allocation.allocatedPeriods++;
-                
-                staffMembers.forEach(staff => {
-                  const currentWorkload = this.teacherWorkload.get(staff.trim()) || 0;
-                  this.teacherWorkload.set(staff.trim(), currentWorkload + 1);
-                });
-              }
-              
-              console.log(`✅ Allocated ${blockSize} consecutive lab periods for ${subjectData.subject} in ${className} on ${this.getDayName(day)} periods ${startPeriod + 1}-${startPeriod + blockSize}`);
-              remainingPeriods -= blockSize;
-              blockAllocated = true;
-              break;
-            }
-          }
-        }
-        
-        if (!blockAllocated) {
-          console.error(`❌ Could not allocate remaining ${remainingPeriods} lab periods for ${subjectData.subject} in ${className}`);
-          break;
-        }
-      }
+    if (isDSPLab) {
+      // For DSP labs, allocate all periods consecutively on the same day
+      this.allocateDSPLabPeriods(subjectData, className, remainingPeriods, staffMembers);
+    } else {
+      // For other labs, allocate on different days
+      this.allocateOtherLabPeriods(subjectData, className, remainingPeriods, staffMembers);
     }
     
     console.log(`📊 Lab allocation complete for ${subjectData.subject}: ${allocation.allocatedPeriods}/${allocation.requiredPeriods} periods allocated`);
+  }
+
+  private allocateDSPLabPeriods(subjectData: SubjectData, className: string, remainingPeriods: number, staffMembers: string[]) {
+    const allocation = this.subjectAllocations.get(`${subjectData.subject}-${className}`);
+    if (!allocation) return;
+
+    // Try to find a day with enough consecutive slots
+    for (let day = 0; day < 6; day++) {
+      let consecutiveFound = 0;
+      let startPeriod = -1;
+      
+      // Find the longest consecutive block available on this day
+      for (let period = 0; period < this.scheduleSettings.totalPeriodsPerDay; period++) {
+        // Skip lunch and break periods
+        if (period + 1 === this.scheduleSettings.lunchPeriod || 
+            this.scheduleSettings.breakPeriods.includes(period + 1)) {
+          consecutiveFound = 0;
+          startPeriod = -1;
+          continue;
+        }
+        
+        if (this.isLabSlotAvailable(day, period, className, subjectData.staff)) {
+          if (startPeriod === -1) startPeriod = period;
+          consecutiveFound++;
+          
+          // If we found enough consecutive slots, allocate them
+          if (consecutiveFound >= remainingPeriods) {
+            for (let i = 0; i < remainingPeriods; i++) {
+              const slot = { day, period: startPeriod + i };
+              this.assignLabSlotWithTracking(slot, subjectData, className);
+              allocation.allocatedPeriods++;
+              
+              // Ensure all 3 staff members are allocated their workload
+              staffMembers.forEach(staff => {
+                const currentWorkload = this.teacherWorkload.get(staff.trim()) || 0;
+                this.teacherWorkload.set(staff.trim(), currentWorkload + 1);
+              });
+            }
+            
+            console.log(`✅ Allocated ${remainingPeriods} consecutive DSP lab periods for ${subjectData.subject} in ${className} on ${this.getDayName(day)} periods ${startPeriod + 1}-${startPeriod + remainingPeriods}`);
+            return;
+          }
+        } else {
+          consecutiveFound = 0;
+          startPeriod = -1;
+        }
+      }
+    }
+    
+    console.error(`❌ Could not allocate ${remainingPeriods} consecutive DSP lab periods for ${subjectData.subject} in ${className}`);
+  }
+
+  private allocateOtherLabPeriods(subjectData: SubjectData, className: string, remainingPeriods: number, staffMembers: string[]) {
+    const allocation = this.subjectAllocations.get(`${subjectData.subject}-${className}`);
+    if (!allocation) return;
+
+    // For non-DSP labs, allocate in blocks on different days
+    const usedDays = new Set<number>();
+    
+    while (remainingPeriods > 0) {
+      const blockSize = Math.min(remainingPeriods, 3); // Max 3 consecutive periods per block
+      let blockAllocated = false;
+      
+      // Try each day (avoid days already used for this lab)
+      for (let day = 0; day < 6 && !blockAllocated; day++) {
+        if (usedDays.has(day)) continue; // Skip days already used for this lab
+        
+        // Try different starting periods for consecutive allocation
+        for (let startPeriod = 0; startPeriod <= this.scheduleSettings.totalPeriodsPerDay - blockSize; startPeriod++) {
+          // Skip if starting period is lunch or break
+          if (startPeriod + 1 === this.scheduleSettings.lunchPeriod || 
+              this.scheduleSettings.breakPeriods.includes(startPeriod + 1)) {
+            continue;
+          }
+          
+          // Check if we can place a block of consecutive periods
+          let canPlaceBlock = true;
+          const consecutiveSlots: { day: number, period: number }[] = [];
+          
+          for (let i = 0; i < blockSize; i++) {
+            const period = startPeriod + i;
+            
+            // Skip lunch and break periods within the block
+            if (period + 1 === this.scheduleSettings.lunchPeriod || 
+                this.scheduleSettings.breakPeriods.includes(period + 1)) {
+              canPlaceBlock = false;
+              break;
+            }
+            
+            // Check if all staff members are available for this slot
+            if (!this.isLabSlotAvailable(day, period, className, subjectData.staff)) {
+              canPlaceBlock = false;
+              break;
+            }
+              
+            consecutiveSlots.push({ day, period });
+          }
+          
+          if (canPlaceBlock) {
+            // Allocate this block
+            for (const slot of consecutiveSlots) {
+              this.assignLabSlotWithTracking(slot, subjectData, className);
+              allocation.allocatedPeriods++;
+              
+              // Ensure all 3 staff members get their workload allocated
+              staffMembers.forEach(staff => {
+                const currentWorkload = this.teacherWorkload.get(staff.trim()) || 0;
+                this.teacherWorkload.set(staff.trim(), currentWorkload + 1);
+              });
+            }
+            
+            usedDays.add(day); // Mark this day as used
+            console.log(`✅ Allocated ${blockSize} consecutive lab periods for ${subjectData.subject} in ${className} on ${this.getDayName(day)} periods ${startPeriod + 1}-${startPeriod + blockSize}`);
+            remainingPeriods -= blockSize;
+            blockAllocated = true;
+            break;
+          }
+        }
+      }
+      
+      if (!blockAllocated) {
+        console.error(`❌ Could not allocate remaining ${remainingPeriods} lab periods for ${subjectData.subject} in ${className}`);
+        break;
+      }
+    }
   }
 
   private reportAllocationStatus() {
