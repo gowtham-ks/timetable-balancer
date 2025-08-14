@@ -284,7 +284,7 @@ export class TimetableGenerator {
           continue;
         }
         
-        if (this.isLabSlotAvailable(day, period, className, subjectData.staff)) {
+        if (this.isLabSlotAvailable(day, period, className, subjectData.staff, subjectData.subject)) {
           if (startPeriod === -1) startPeriod = period;
           consecutiveFound++;
           
@@ -294,13 +294,13 @@ export class TimetableGenerator {
               const slot = { day, period: startPeriod + i };
               this.assignLabSlotWithTracking(slot, subjectData, className);
               allocation.allocatedPeriods++;
-              
-              // Ensure all 3 staff members are allocated their workload
-              staffMembers.forEach(staff => {
-                const currentWorkload = this.teacherWorkload.get(staff.trim()) || 0;
-                this.teacherWorkload.set(staff.trim(), currentWorkload + 1);
-              });
             }
+            
+            // Update workload for all staff members
+            staffMembers.forEach(staff => {
+              const currentWorkload = this.teacherWorkload.get(staff.trim()) || 0;
+              this.teacherWorkload.set(staff.trim(), currentWorkload + remainingPeriods);
+            });
             
             console.log(`✅ Allocated ${remainingPeriods} consecutive DSP lab periods for ${subjectData.subject} in ${className} on ${this.getDayName(day)} periods ${startPeriod + 1}-${startPeriod + remainingPeriods}`);
             return;
@@ -327,8 +327,8 @@ export class TimetableGenerator {
     const usedDays = new Set<number>();
 
     for (let day = 0; day < 6 && periodsAllocated < remainingPeriods; day++) {
-      // Skip if this day already has a lab for this class
-      if (this.hasLabOnDay(className, day)) continue;
+      // Skip if this day already has a different lab for this class (allow same lab on same day for consecutive periods)
+      if (this.hasDifferentLabOnDay(className, day, subjectData.subject)) continue;
 
       let consecutiveFound = 0;
       let startPeriod = -1;
@@ -343,7 +343,7 @@ export class TimetableGenerator {
           continue;
         }
         
-        if (this.isLabSlotAvailable(day, period, className, subjectData.staff)) {
+        if (this.isLabSlotAvailable(day, period, className, subjectData.staff, subjectData.subject)) {
           if (startPeriod === -1) startPeriod = period;
           consecutiveFound++;
           
@@ -356,6 +356,12 @@ export class TimetableGenerator {
               allocation.allocatedPeriods++;
               periodsAllocated++;
             }
+            
+            // Update workload for all staff members
+            staffMembers.forEach(staff => {
+              const currentWorkload = this.teacherWorkload.get(staff.trim()) || 0;
+              this.teacherWorkload.set(staff.trim(), currentWorkload + periodsToAllocate);
+            });
             
             console.log(`✅ Allocated ${periodsToAllocate} consecutive lab periods for ${subjectData.subject} in ${className} on ${this.getDayName(day)} periods ${startPeriod + 1}-${startPeriod + periodsToAllocate}`);
             usedDays.add(day);
@@ -375,6 +381,17 @@ export class TimetableGenerator {
     console.log(`📊 Lab allocation complete for ${subjectData.subject}: ${periodsAllocated}/${remainingPeriods} periods allocated`);
   }
 
+  private hasDifferentLabOnDay(className: string, day: number, currentSubject: string): boolean {
+    const classSchedule = this.classTimetables.get(className);
+    if (!classSchedule) return false;
+    
+    return classSchedule[day].some(slot => 
+      slot.subject && 
+      this.isLabSubject(slot.subject) && 
+      slot.subject !== currentSubject
+    );
+  }
+
   private hasLabOnDay(className: string, day: number): boolean {
     const classSchedule = this.classTimetables.get(className);
     if (!classSchedule) return false;
@@ -384,17 +401,17 @@ export class TimetableGenerator {
     );
   }
 
-  private isLabSlotAvailable(day: number, period: number, className: string, staffString: string): boolean {
+  private isLabSlotAvailable(day: number, period: number, className: string, staffString: string, subjectName: string): boolean {
     const classSchedule = this.classTimetables.get(className);
     if (!classSchedule || classSchedule[day][period].subject) return false;
 
-    // Check if there's already another lab on this day for this class (except for DSP labs which can be on same day)
+    // Check if there's already another lab on this day for this class
     const daySchedule = classSchedule[day];
     const hasLabToday = daySchedule.some(slot => slot.subject && this.isLabSubject(slot.subject));
     
-    // Allow DSP labs to be on same day, but not other labs
-    const isDSPLab = staffString.toLowerCase().includes('data structures') && 
-                     staffString.toLowerCase().includes('python');
+    // Allow only one lab per day per class (DSP labs can have multiple consecutive periods on same day)
+    const isDSPLab = subjectName.toLowerCase().includes('data structures') && 
+                     subjectName.toLowerCase().includes('python');
     if (hasLabToday && !isDSPLab) return false;
 
     const staffMembers = this.parseStaffMembers(staffString);

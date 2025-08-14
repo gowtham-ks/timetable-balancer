@@ -25,7 +25,8 @@ export function parseCSV(csvContent: string): SubjectData[] {
     // Skip empty lines
     if (!line) continue;
     
-    const values = line.split(',').map(v => v.trim());
+    // Parse CSV line properly handling quoted values
+    const values = parseCSVLine(line);
     
     // Handle flexible column counts - pad with empty strings if fewer columns
     while (values.length < headers.length) {
@@ -82,6 +83,29 @@ export function parseCSV(csvContent: string): SubjectData[] {
   }
 
   return data;
+}
+
+// Helper function to properly parse CSV line with quoted values
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current.trim());
+  return result;
 }
 
 export function validateCSVStructure(file: File): Promise<boolean> {
