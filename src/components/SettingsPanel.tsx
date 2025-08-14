@@ -5,20 +5,28 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Settings, User, Plus, Trash2 } from 'lucide-react';
-import { ScheduleSettings, TeacherPreference } from '@/types/timetable';
+import { ScheduleSettings, TeacherPreference, SubjectData } from '@/types/timetable';
 
 interface SettingsPanelProps {
+  subjectData: SubjectData[];
   scheduleSettings: ScheduleSettings;
   teacherPreferences: TeacherPreference[];
+  onSubjectDataChange: (data: SubjectData[]) => void;
   onScheduleSettingsChange: (settings: ScheduleSettings) => void;
   onTeacherPreferencesChange: (preferences: TeacherPreference[]) => void;
+  onGenerateTimetables: () => Promise<void>;
+  isGenerating: boolean;
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
+  subjectData,
   scheduleSettings,
   teacherPreferences,
+  onSubjectDataChange,
   onScheduleSettingsChange,
   onTeacherPreferencesChange,
+  onGenerateTimetables,
+  isGenerating,
 }) => {
   const [newTeacherName, setNewTeacherName] = React.useState('');
   const [newDepartment, setNewDepartment] = React.useState('');
