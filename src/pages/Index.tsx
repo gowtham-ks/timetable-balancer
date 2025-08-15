@@ -194,9 +194,9 @@ const Index = () => {
         </div>
 
         {/* Main Content */}
-        <div className="grid gap-8 lg:grid-cols-4">
+        <div className="grid gap-8 xl:grid-cols-3 lg:grid-cols-2">
           {/* Settings Panel */}
-          <div className="lg:col-span-1 animate-fade-in-delay-4">
+          <div className="xl:col-span-1 lg:col-span-1 animate-fade-in-delay-4">
             <div className="space-y-6">
               <SettingsPanel
                 subjectData={subjectData}
@@ -253,7 +253,7 @@ const Index = () => {
           </div>
 
           {/* Results Area */}
-          <div className="lg:col-span-3 space-y-8">
+          <div className="xl:col-span-2 lg:col-span-1 space-y-8">
             {hasGeneratedTimetables ? (
               <div className="space-y-8 animate-fade-in-delay-5">
                 <TimetableDisplay
