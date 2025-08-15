@@ -4,8 +4,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Settings, User, Plus, Trash2 } from 'lucide-react';
+import { Settings, User, Plus, Trash2, Upload } from 'lucide-react';
 import { ScheduleSettings, TeacherPreference, SubjectData } from '@/types/timetable';
+import { FileUpload } from '@/components/FileUpload';
 
 interface SettingsPanelProps {
   subjectData: SubjectData[];
@@ -80,8 +81,31 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   };
 
   return (
-    <div className="grid md:grid-cols-2 gap-6">
-      {/* Schedule Settings */}
+    <div className="space-y-6">
+      {/* File Upload Section */}
+      <Card className="card-gradient shadow-card border-border/50 overflow-hidden group hover:shadow-glow transition-all duration-300">
+        <CardHeader className="bg-gradient-to-r from-accent/20 to-secondary/20 border-b border-border/30">
+          <CardTitle className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
+              <Upload className="h-5 w-5 text-primary" />
+            </div>
+            <span className="gradient-text font-bold text-lg">Upload Subject Data</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-6">
+          <FileUpload onDataUpload={onSubjectDataChange} />
+          {subjectData.length > 0 && (
+            <div className="mt-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+              <p className="text-sm text-primary font-medium">
+                ✅ {subjectData.length} subjects loaded successfully
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Schedule Settings */}
       <Card className="card-gradient shadow-card border-border/50 overflow-hidden group hover:shadow-glow transition-all duration-300">
         <CardHeader className="bg-gradient-to-r from-primary/10 to-primary-glow/10 border-b border-border/30">
           <CardTitle className="flex items-center gap-3">
@@ -312,6 +336,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };
