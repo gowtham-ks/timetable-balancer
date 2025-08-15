@@ -126,8 +126,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 type="number"
                 min="1"
                 max="12"
-                value={scheduleSettings.totalPeriodsPerDay}
-                onChange={(e) => handleScheduleChange('totalPeriodsPerDay', parseInt(e.target.value))}
+                value={scheduleSettings.totalPeriodsPerDay || ''}
+                onChange={(e) => handleScheduleChange('totalPeriodsPerDay', parseInt(e.target.value) || 9)}
                 className="bg-background border-border/60 focus:border-primary transition-colors"
               />
             </div>
@@ -141,8 +141,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 type="number"
                 min="1"
                 max={scheduleSettings.totalPeriodsPerDay}
-                value={scheduleSettings.lunchPeriod}
-                onChange={(e) => handleScheduleChange('lunchPeriod', parseInt(e.target.value))}
+                value={scheduleSettings.lunchPeriod || ''}
+                onChange={(e) => handleScheduleChange('lunchPeriod', parseInt(e.target.value) || 5)}
                 className="bg-background border-border/60 focus:border-primary transition-colors"
               />
             </div>
@@ -170,8 +170,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               type="number"
               min="1"
               max="40"
-              value={scheduleSettings.maxTeacherPeriodsPerWeek}
-              onChange={(e) => handleScheduleChange('maxTeacherPeriodsPerWeek', parseInt(e.target.value))}
+              value={scheduleSettings.maxTeacherPeriodsPerWeek || ''}
+              onChange={(e) => handleScheduleChange('maxTeacherPeriodsPerWeek', parseInt(e.target.value) || 25)}
               className="bg-background border-border/60 focus:border-primary transition-colors"
             />
           </div>

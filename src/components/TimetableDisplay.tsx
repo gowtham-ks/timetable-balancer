@@ -59,7 +59,9 @@ export const TimetableDisplay = ({
                     {period}
                   </td>
                   {days.map((day, dayIndex) => {
-                    const slot = classData.schedule[dayIndex][period - 1];
+                    // Safe access to schedule with fallbacks
+                    const daySchedule = classData.schedule?.[dayIndex] || [];
+                    const slot = daySchedule[period - 1];
                     
                     if (isBreakPeriod(period)) {
                       return (
@@ -73,7 +75,7 @@ export const TimetableDisplay = ({
 
                     return (
                       <td key={day} className="border border-border p-1 text-center">
-                        {slot.subject ? (
+                        {slot?.subject ? (
                           <div className="space-y-1 hover-scale">
                             <div className="text-sm font-medium text-primary animate-fade-in">
                               {slot.subject}
@@ -130,7 +132,9 @@ export const TimetableDisplay = ({
                     {period}
                   </td>
                   {days.map((day, dayIndex) => {
-                    const slot = teacherData.schedule[dayIndex][period - 1];
+                    // Safe access to schedule with fallbacks
+                    const daySchedule = teacherData.schedule?.[dayIndex] || [];
+                    const slot = daySchedule[period - 1];
                     
                     if (isBreakPeriod(period)) {
                       return (
@@ -144,7 +148,7 @@ export const TimetableDisplay = ({
 
                     return (
                       <td key={day} className="border border-border p-1 text-center">
-                        {slot.subject ? (
+                        {slot?.subject ? (
                           <div className="space-y-1 hover-scale">
                             <div className="text-sm font-medium text-primary animate-fade-in">
                               {slot.subject}
