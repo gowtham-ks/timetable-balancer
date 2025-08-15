@@ -274,11 +274,10 @@ export class TimetableGenerator {
       let consecutiveFound = 0;
       let startPeriod = -1;
       
-      // Find the longest consecutive block available on this day
+      // Find the longest consecutive block available on this day (labs can span breaks)
       for (let period = 0; period < this.scheduleSettings.totalPeriodsPerDay; period++) {
-        // Skip lunch and break periods
-        if (period + 1 === this.scheduleSettings.lunchPeriod || 
-            this.scheduleSettings.breakPeriods.includes(period + 1)) {
+        // Skip lunch period but allow labs to continue across break periods
+        if (period + 1 === this.scheduleSettings.lunchPeriod) {
           consecutiveFound = 0;
           startPeriod = -1;
           continue;
@@ -333,14 +332,13 @@ export class TimetableGenerator {
       let startPeriod = -1;
       let availableSlots: number[] = [];
       
-      // Find all available consecutive periods on this day
+      // Find all available consecutive periods on this day (labs can span breaks)
       for (let period = 0; period < this.scheduleSettings.totalPeriodsPerDay; period++) {
-        // Skip lunch and break periods
-        if (period + 1 === this.scheduleSettings.lunchPeriod || 
-            this.scheduleSettings.breakPeriods.includes(period + 1)) {
-          // Reset consecutive tracking when hitting breaks
+        // Skip lunch period but allow labs to continue across break periods
+        if (period + 1 === this.scheduleSettings.lunchPeriod) {
+          // Reset consecutive tracking when hitting lunch
           if (availableSlots.length >= remainingPeriods - periodsAllocated) {
-            break; // We found enough slots before the break
+            break; // We found enough slots before lunch
           }
           availableSlots = [];
           consecutiveFound = 0;
@@ -415,18 +413,22 @@ export class TimetableGenerator {
     );
   }
 
+  private hasSubjectOnDay(className: string, day: number, subject: string): boolean {
+    const classSchedule = this.classTimetables.get(className);
+    if (!classSchedule) return false;
+    
+    return classSchedule[day].some(slot => 
+      slot.subject === subject
+    );
+  }
+
   private isLabSlotAvailable(day: number, period: number, className: string, staffString: string, subjectName: string): boolean {
     const classSchedule = this.classTimetables.get(className);
     if (!classSchedule || classSchedule[day][period].subject) return false;
 
-    // Check if there's already another lab on this day for this class
-    const daySchedule = classSchedule[day];
-    const hasLabToday = daySchedule.some(slot => slot.subject && this.isLabSubject(slot.subject));
-    
-    // Allow only one lab per day per class (DSP labs can have multiple consecutive periods on same day)
-    const isDSPLab = subjectName.toLowerCase().includes('data structures') && 
-                     subjectName.toLowerCase().includes('python');
-    if (hasLabToday && !isDSPLab) return false;
+    // Check if there's already a different lab subject on this day for this class
+    // Allow same lab to continue (for consecutive periods) but not different labs
+    if (this.hasDifferentLabOnDay(className, day, subjectName)) return false;
 
     const staffMembers = this.parseStaffMembers(staffString);
     
@@ -648,16 +650,13 @@ export class TimetableGenerator {
   }
 
   private wouldCreateRepetition(day: number, period: number, className: string, subject: string): boolean {
-    const classSchedule = this.classTimetables.get(className);
-    if (!classSchedule) return false;
-
-    const daySchedule = classSchedule[day];
+    // For lab subjects, allow repetition (consecutive periods)
+    if (this.isLabSubject(subject)) {
+      return false;
+    }
     
-    // Check adjacent periods
-    if (period > 0 && daySchedule[period - 1].subject === subject) return true;
-    if (period < daySchedule.length - 1 && daySchedule[period + 1].subject === subject) return true;
-    
-    return false;
+    // For non-lab subjects, check if subject already exists on this day
+    return this.hasSubjectOnDay(className, day, subject);
   }
 
   private getDayIndex(dayName: string): number {
