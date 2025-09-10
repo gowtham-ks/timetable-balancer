@@ -137,56 +137,87 @@ const Index = () => {
   const hasGeneratedTimetables = classTimetables.length > 0 || teacherTimetables.length > 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-primary/5">
-      <div className="container mx-auto px-4 py-8 space-y-8">
+    <div className="min-h-screen hero-gradient relative overflow-hidden">
+      {/* Animated Background Elements */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl animate-float"></div>
+        <div className="absolute top-1/4 -left-20 w-60 h-60 bg-secondary/10 rounded-full blur-3xl animate-float" style={{animationDelay: '2s'}}></div>
+        <div className="absolute bottom-1/4 right-1/3 w-40 h-40 bg-accent/10 rounded-full blur-3xl animate-float" style={{animationDelay: '4s'}}></div>
+      </div>
+      
+      <div className="relative z-10 container mx-auto px-4 py-8 space-y-8">
         {/* Enhanced Header */}
         <div className="text-center space-y-6 animate-fade-in">
-          <div className="flex items-center justify-center gap-4 animate-float">
-            <div className="relative">
-              <GraduationCap className="h-16 w-16 text-primary drop-shadow-lg" />
-              <Sparkles className="h-6 w-6 text-primary-light absolute -top-1 -right-1 animate-pulse" />
+          <div className="flex items-center justify-center gap-6 animate-scale-in">
+            <div className="relative group">
+              <div className="absolute inset-0 bg-gradient-primary rounded-full blur-xl opacity-30 group-hover:opacity-50 transition-opacity duration-300"></div>
+              <div className="relative glass p-4 rounded-full">
+                <GraduationCap className="h-16 w-16 text-primary drop-shadow-lg" />
+                <Sparkles className="h-6 w-6 text-accent absolute -top-1 -right-1 animate-pulse" />
+              </div>
             </div>
-            <h1 className="text-5xl font-bold gradient-text floating">
-              Advanced Timetable Generator
-            </h1>
+            <div className="space-y-2">
+              <h1 className="text-6xl font-bold gradient-text floating bg-clip-text text-transparent bg-gradient-to-r from-primary via-secondary to-accent">
+                SmartSchedule Pro
+              </h1>
+              <div className="flex items-center justify-center gap-2">
+                <div className="h-1 w-12 bg-gradient-primary rounded-full"></div>
+                <Badge variant="outline" className="text-xs font-medium border-primary/20">
+                  AI-Powered
+                </Badge>
+                <div className="h-1 w-12 bg-gradient-primary rounded-full"></div>
+              </div>
+            </div>
           </div>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto animate-fade-in-delay-2">
-            Create intelligent, constraint-based timetables with advanced lab allocation, 
-            teacher preferences, and conflict resolution
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto animate-fade-in-delay-2 leading-relaxed">
+            Revolutionary timetable generation with intelligent lab allocation, 
+            advanced constraint resolution, and seamless teacher preference integration
           </p>
           
-          {/* Stats Cards */}
+          {/* Enhanced Stats Cards */}
           {hasGeneratedTimetables && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto animate-fade-in-delay-3">
-              <Card className="card-gradient hover-scale">
-                <CardContent className="p-4 text-center">
-                  <Calendar className="h-8 w-8 text-primary mx-auto mb-2" />
-                  <Badge variant="secondary" className="mb-1">{classTimetables.length}</Badge>
-                  <p className="text-sm text-muted-foreground">Classes</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-5xl mx-auto animate-fade-in-delay-3">
+              <Card className="glass shadow-elegant hover-scale group">
+                <CardContent className="p-6 text-center">
+                  <div className="relative mb-4">
+                    <div className="absolute inset-0 bg-gradient-primary rounded-full blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
+                    <Calendar className="h-10 w-10 text-primary mx-auto relative z-10" />
+                  </div>
+                  <div className="text-3xl font-bold gradient-text mb-1">{classTimetables.length}</div>
+                  <p className="text-sm text-muted-foreground font-medium">Classes Generated</p>
                 </CardContent>
               </Card>
               
-              <Card className="card-gradient hover-scale">
-                <CardContent className="p-4 text-center">
-                  <Users className="h-8 w-8 text-primary mx-auto mb-2" />
-                  <Badge variant="secondary" className="mb-1">{teacherTimetables.length}</Badge>
-                  <p className="text-sm text-muted-foreground">Teachers</p>
+              <Card className="glass shadow-elegant hover-scale group">
+                <CardContent className="p-6 text-center">
+                  <div className="relative mb-4">
+                    <div className="absolute inset-0 bg-gradient-primary rounded-full blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
+                    <Users className="h-10 w-10 text-secondary mx-auto relative z-10" />
+                  </div>
+                  <div className="text-3xl font-bold gradient-text mb-1">{teacherTimetables.length}</div>
+                  <p className="text-sm text-muted-foreground font-medium">Teachers Scheduled</p>
                 </CardContent>
               </Card>
               
-              <Card className="card-gradient hover-scale">
-                <CardContent className="p-4 text-center">
-                  <BookOpen className="h-8 w-8 text-primary mx-auto mb-2" />
-                  <Badge variant="secondary" className="mb-1">{subjectData.length}</Badge>
-                  <p className="text-sm text-muted-foreground">Subjects</p>
+              <Card className="glass shadow-elegant hover-scale group">
+                <CardContent className="p-6 text-center">
+                  <div className="relative mb-4">
+                    <div className="absolute inset-0 bg-gradient-primary rounded-full blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
+                    <BookOpen className="h-10 w-10 text-accent mx-auto relative z-10" />
+                  </div>
+                  <div className="text-3xl font-bold gradient-text mb-1">{subjectData.length}</div>
+                  <p className="text-sm text-muted-foreground font-medium">Subjects Allocated</p>
                 </CardContent>
               </Card>
               
-              <Card className="card-gradient hover-scale">
-                <CardContent className="p-4 text-center">
-                  <Clock className="h-8 w-8 text-primary mx-auto mb-2" />
-                  <Badge variant="secondary" className="mb-1">{scheduleSettings.totalPeriodsPerDay}</Badge>
-                  <p className="text-sm text-muted-foreground">Periods/Day</p>
+              <Card className="glass shadow-elegant hover-scale group">
+                <CardContent className="p-6 text-center">
+                  <div className="relative mb-4">
+                    <div className="absolute inset-0 bg-gradient-primary rounded-full blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
+                    <Clock className="h-10 w-10 text-primary mx-auto relative z-10" />
+                  </div>
+                  <div className="text-3xl font-bold gradient-text mb-1">{scheduleSettings.totalPeriodsPerDay}</div>
+                  <p className="text-sm text-muted-foreground font-medium">Periods Per Day</p>
                 </CardContent>
               </Card>
             </div>
@@ -194,56 +225,61 @@ const Index = () => {
         </div>
 
         {/* Main Content */}
-        <div className="grid gap-8 xl:grid-cols-3 lg:grid-cols-2">
-          {/* Settings Panel */}
+        <div className="grid gap-8 xl:grid-cols-4 lg:grid-cols-3">
+          {/* Enhanced Settings Panel */}
           <div className="xl:col-span-1 lg:col-span-1 animate-fade-in-delay-4">
             <div className="space-y-6">
-              <SettingsPanel
-                subjectData={subjectData}
-                teacherPreferences={teacherPreferences}
-                scheduleSettings={scheduleSettings}
-                onSubjectDataChange={setSubjectData}
-                onTeacherPreferencesChange={setTeacherPreferences}
-                onScheduleSettingsChange={setScheduleSettings}
-                onGenerateTimetables={generateTimetables}
-                isGenerating={isGenerating}
-              />
+              <div className="glass p-1 rounded-xl shadow-elegant">
+                <SettingsPanel
+                  subjectData={subjectData}
+                  teacherPreferences={teacherPreferences}
+                  scheduleSettings={scheduleSettings}
+                  onSubjectDataChange={setSubjectData}
+                  onTeacherPreferencesChange={setTeacherPreferences}
+                  onScheduleSettingsChange={setScheduleSettings}
+                  onGenerateTimetables={generateTimetables}
+                  isGenerating={isGenerating}
+                />
+              </div>
               
-              {/* Action Buttons */}
+              {/* Enhanced Action Buttons */}
               {hasGeneratedTimetables && (
-                <Card className="card-gradient animate-fade-in-delay-5">
-                  <CardContent className="p-4 space-y-3">
-                    <h3 className="font-semibold text-sm gradient-text">Export Options</h3>
+                <Card className="glass shadow-elegant animate-fade-in-delay-5 border-primary/20">
+                  <CardContent className="p-6 space-y-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="h-2 w-2 bg-gradient-primary rounded-full animate-pulse"></div>
+                      <h3 className="font-semibold gradient-text">Export & Actions</h3>
+                    </div>
                     
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <Button 
                         onClick={handleExportCSV}
                         variant="outline" 
-                        size="sm" 
-                        className="w-full hover-scale"
+                        size="default" 
+                        className="w-full hover-scale glass-button group"
                       >
-                        <Download className="h-4 w-4 mr-2" />
-                        Export CSV
+                        <Download className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
+                        Export to CSV
                       </Button>
                       
                       <Button 
                         onClick={handleExportExcel}
                         variant="outline" 
-                        size="sm" 
-                        className="w-full hover-scale"
+                        size="default" 
+                        className="w-full hover-scale glass-button group"
                       >
-                        <FileSpreadsheet className="h-4 w-4 mr-2" />
-                        Export Excel
+                        <FileSpreadsheet className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
+                        Export to Excel
                       </Button>
                       
                       <Button 
                         onClick={clearAll}
                         variant="destructive" 
-                        size="sm" 
-                        className="w-full hover-scale"
+                        size="default" 
+                        className="w-full hover-scale shadow-glow group"
                       >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Clear All
+                        <Trash2 className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
+                        Clear All Data
                       </Button>
                     </div>
                   </CardContent>
@@ -252,55 +288,63 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Results Area */}
-          <div className="xl:col-span-2 lg:col-span-1 space-y-8">
+          {/* Enhanced Results Area */}
+          <div className="xl:col-span-3 lg:col-span-2 space-y-8">
             {hasGeneratedTimetables ? (
               <div className="space-y-8 animate-fade-in-delay-5">
-                <TimetableDisplay
-                  classTimetables={classTimetables}
-                  teacherTimetables={teacherTimetables}
-                  totalPeriods={scheduleSettings.totalPeriodsPerDay}
-                  lunchPeriod={scheduleSettings.lunchPeriod}
-                  breakPeriods={scheduleSettings.breakPeriods}
-                />
+                <div className="glass p-1 rounded-xl shadow-elegant">
+                  <TimetableDisplay
+                    classTimetables={classTimetables}
+                    teacherTimetables={teacherTimetables}
+                    totalPeriods={scheduleSettings.totalPeriodsPerDay}
+                    lunchPeriod={scheduleSettings.lunchPeriod}
+                    breakPeriods={scheduleSettings.breakPeriods}
+                  />
+                </div>
                 
                 {allocationReport.length > 0 && (
-                  <div className="animate-fade-in-delay-6">
+                  <div className="animate-fade-in-delay-6 glass p-1 rounded-xl shadow-elegant">
                     <AllocationReport allocations={allocationReport} />
                   </div>
                 )}
               </div>
             ) : (
-              <Card className="card-gradient text-center p-12 animate-fade-in-delay-5">
-                <div className="space-y-4">
+              <Card className="glass text-center p-16 animate-fade-in-delay-5 shadow-elegant border-primary/10">
+                <div className="space-y-6 max-w-2xl mx-auto">
                   <div className="flex justify-center">
-                    <div className="relative">
-                      <Calendar className="h-24 w-24 text-muted-foreground/30" />
-                      <Sparkles className="h-8 w-8 text-primary absolute -top-2 -right-2 animate-pulse" />
+                    <div className="relative group">
+                      <div className="absolute inset-0 bg-gradient-primary rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity"></div>
+                      <div className="relative glass p-8 rounded-full">
+                        <Calendar className="h-32 w-32 text-primary/60" />
+                        <Sparkles className="h-12 w-12 text-accent absolute -top-2 -right-2 animate-pulse" />
+                      </div>
                     </div>
                   </div>
-                  <h3 className="text-2xl font-semibold text-muted-foreground">
-                    Ready to Generate Timetables
-                  </h3>
-                  <p className="text-muted-foreground max-w-md mx-auto">
-                    Upload your subject data and configure settings to generate 
-                    intelligent, optimized timetables with advanced constraint resolution.
-                  </p>
-                  <div className="pt-4">
+                  <div className="space-y-3">
+                    <h3 className="text-3xl font-bold gradient-text">
+                      Ready to Create Magic ✨
+                    </h3>
+                    <p className="text-lg text-muted-foreground leading-relaxed">
+                      Upload your subject data and let our AI-powered engine craft 
+                      the perfect timetables with intelligent constraint resolution 
+                      and optimized scheduling algorithms.
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">
                     <Button 
                       onClick={generateTimetables}
                       disabled={subjectData.length === 0 || isGenerating}
                       size="lg"
-                      className="hover-scale shadow-elegant"
+                      className="hover-scale shadow-elegant px-8 py-6 text-lg group"
                     >
                       {isGenerating ? (
                         <>
-                          <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-                          Generating...
+                          <RefreshCw className="h-6 w-6 mr-3 animate-spin" />
+                          Generating Magic...
                         </>
                       ) : (
                         <>
-                          <Sparkles className="h-5 w-5 mr-2" />
+                          <Sparkles className="h-6 w-6 mr-3 group-hover:rotate-12 transition-transform" />
                           Generate Timetables
                         </>
                       )}
