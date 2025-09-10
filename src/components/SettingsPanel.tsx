@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Settings, User, Plus, Trash2, Upload } from 'lucide-react';
+import { Settings, User, Plus, Trash2, Upload, GraduationCap, RefreshCw } from 'lucide-react';
 import { ScheduleSettings, TeacherPreference, SubjectData } from '@/types/timetable';
 import { FileUpload } from '@/components/FileUpload';
 
@@ -127,7 +127,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 min="1"
                 max="12"
                 value={scheduleSettings.totalPeriodsPerDay || ''}
-                onChange={(e) => handleScheduleChange('totalPeriodsPerDay', parseInt(e.target.value) || 9)}
+                onChange={(e) => handleScheduleChange('totalPeriodsPerDay', parseInt(e.target.value) || 10)}
                 className="bg-background border-border/60 focus:border-primary transition-colors"
               />
             </div>
@@ -142,7 +142,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 min="1"
                 max={scheduleSettings.totalPeriodsPerDay}
                 value={scheduleSettings.lunchPeriod || ''}
-                onChange={(e) => handleScheduleChange('lunchPeriod', parseInt(e.target.value) || 5)}
+                onChange={(e) => handleScheduleChange('lunchPeriod', parseInt(e.target.value) || 6)}
                 className="bg-background border-border/60 focus:border-primary transition-colors"
               />
             </div>
@@ -337,6 +337,35 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </CardContent>
       </Card>
       </div>
+
+      {/* Generate Button Section */}
+      <Card className="card-gradient shadow-card border-primary/20 overflow-hidden group hover:shadow-glow transition-all duration-300">
+        <CardContent className="p-6">
+          <Button 
+            onClick={onGenerateTimetables}
+            disabled={subjectData.length === 0 || isGenerating}
+            size="lg"
+            className="w-full bg-gradient-primary text-primary-foreground hover:shadow-glow group font-semibold py-6"
+          >
+            {isGenerating ? (
+              <>
+                <RefreshCw className="h-6 w-6 mr-3 animate-spin" />
+                Generating Timetables...
+              </>
+            ) : (
+              <>
+                <GraduationCap className="h-6 w-6 mr-3 group-hover:scale-110 transition-transform" />
+                Generate Timetables
+              </>
+            )}
+          </Button>
+          {subjectData.length === 0 && (
+            <p className="text-center text-sm text-muted-foreground mt-3">
+              Please upload subject data first
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };

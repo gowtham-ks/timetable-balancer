@@ -34,9 +34,9 @@ const Index = () => {
   const [subjectData, setSubjectData] = useState<SubjectData[]>([]);
   const [teacherPreferences, setTeacherPreferences] = useState<TeacherPreference[]>([]);
   const [scheduleSettings, setScheduleSettings] = useState<ScheduleSettings>({
-    totalPeriodsPerDay: 9,
-    lunchPeriod: 5,
-    breakPeriods: [3],
+    totalPeriodsPerDay: 10,
+    lunchPeriod: 6,
+    breakPeriods: [3, 9],
     maxTeacherPeriodsPerWeek: 25,
   });
   
@@ -252,6 +252,16 @@ const Index = () => {
                     </div>
                     
                     <div className="space-y-3">
+                      <Button 
+                        onClick={generateTimetables}
+                        disabled={isGenerating}
+                        size="default"
+                        className="w-full hover-scale glass-button bg-gradient-primary text-primary-foreground group"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2 group-hover:rotate-180 transition-transform duration-500" />
+                        {isGenerating ? "Regenerating..." : "Regenerate Timetables"}
+                      </Button>
+                      
                       <Button 
                         onClick={handleExportCSV}
                         variant="outline" 
