@@ -1,4 +1,14 @@
-import { ClassTimetable, TeacherTimetable } from '@/types/timetable';
+import { ClassTimetable, TeacherTimetable, ScheduleSettings } from '@/types/timetable';
+
+export function exportClassTimetablesToCSV(classTimetables: ClassTimetable[], scheduleSettings: ScheduleSettings) {
+  const { classCSV } = exportToCSV(classTimetables, []);
+  downloadCSV(classCSV, 'class-timetables.csv');
+}
+
+export function exportTeacherTimetablesToCSV(teacherTimetables: TeacherTimetable[], scheduleSettings: ScheduleSettings) {
+  const { teacherCSV } = exportToCSV([], teacherTimetables);
+  downloadCSV(teacherCSV, 'teacher-timetables.csv');
+}
 
 export function exportToCSV(classTimetables: ClassTimetable[], teacherTimetables: TeacherTimetable[]) {
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];

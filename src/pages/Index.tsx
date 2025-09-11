@@ -1,33 +1,33 @@
-import { useState } from 'react';
-import { TimetableGenerator } from '@/utils/timetableGenerator';
+import React, { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SettingsPanel } from '@/components/SettingsPanel';
 import { TimetableDisplay } from '@/components/TimetableDisplay';
 import { AllocationReport } from '@/components/AllocationReport';
-import { SettingsPanel } from '@/components/SettingsPanel';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
+import { TimetableGenerator } from '@/utils/timetableGenerator';
+import { exportClassTimetablesToCSV, exportTeacherTimetablesToCSV } from '@/utils/exportUtils';
 import { 
   SubjectData, 
   TeacherPreference, 
-  ScheduleSettings,
-  ClassTimetable,
-  TeacherTimetable,
-  SubjectAllocation
+  ScheduleSettings, 
+  ClassTimetable, 
+  TeacherTimetable, 
+  SubjectAllocation 
 } from '@/types/timetable';
-import { exportToCSV, downloadCSV } from '@/utils/exportUtils';
-import { exportToExcel } from '@/utils/exportUtils';
-import { 
-  Download,
-  FileSpreadsheet,
-  RefreshCw,
-  Trash2,
-  GraduationCap,
-  Clock,
+import {
+  Calendar,
   Users,
   BookOpen,
-  Calendar,
-  Sparkles
+  Download,
+  BarChart3,
+  RefreshCw,
+  Zap,
+  Clock,
+  Sparkles,
+  GraduationCap,
+  Brain
 } from 'lucide-react';
 
 const Index = () => {
@@ -50,8 +50,8 @@ const Index = () => {
   const generateTimetables = async () => {
     if (subjectData.length === 0) {
       toast({
-        title: "No Data",
-        description: "Please upload subject data before generating timetables",
+        title: "Missing Data",
+        description: "Please upload subject data before generating timetables.",
         variant: "destructive",
       });
       return;
@@ -60,40 +60,22 @@ const Index = () => {
     setIsGenerating(true);
     
     try {
-      console.log('Starting timetable generation with:', {
-        subjects: subjectData.length,
-        teachers: teacherPreferences.length,
-        settings: scheduleSettings
-      });
-
       const generator = new TimetableGenerator(subjectData, teacherPreferences, scheduleSettings);
       const result = generator.generateTimetables();
       
-      // Get current state for allocations
-      const currentState = generator.getCurrentState();
-      const allocations = Array.from(currentState.subjectAllocations.values());
-      
       setClassTimetables(result.classTimetables);
       setTeacherTimetables(result.teacherTimetables);
-      setAllocationReport(allocations);
-
-      // Check for allocation issues
-      const underAllocated = allocations.filter(a => a.allocatedPeriods < a.requiredPeriods);
-      const overAllocated = allocations.filter(a => a.allocatedPeriods > a.requiredPeriods);
-
-      if (overAllocated.length > 0 || underAllocated.length > 0) {
-        console.warn('Allocation issues detected:', { overAllocated, underAllocated });
-      }
-
+      // setAllocationReport(result.allocationReport || []);
+      
       toast({
-        title: "Timetables Generated Successfully! ✨",
-        description: `Generated ${result.classTimetables.length} class timetables and ${result.teacherTimetables.length} teacher timetables`,
+        title: "Success! 🎉",
+        description: `Generated ${result.classTimetables.length} class timetables and ${result.teacherTimetables.length} teacher timetables.`,
       });
     } catch (error) {
       console.error('Error generating timetables:', error);
       toast({
         title: "Generation Failed",
-        description: error instanceof Error ? error.message : "Failed to generate timetables",
+        description: "There was an error generating the timetables. Please check your data and try again.",
         variant: "destructive",
       });
     } finally {
@@ -102,265 +84,251 @@ const Index = () => {
   };
 
   const handleExportCSV = () => {
-    const { classCSV, teacherCSV } = exportToCSV(classTimetables, teacherTimetables);
-    downloadCSV(classCSV, 'class_timetables.csv');
-    downloadCSV(teacherCSV, 'teacher_timetables.csv');
-    
-    toast({
-      title: "Export Successful",
-      description: "Timetables exported to CSV files",
-    });
-  };
+    if (classTimetables.length === 0) {
+      toast({
+        title: "No Data",
+        description: "Please generate timetables first before exporting.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  const handleExportExcel = () => {
-    exportToExcel(classTimetables, teacherTimetables);
-    
-    toast({
-      title: "Export Successful",
-      description: "Timetables exported to Excel file",
-    });
+    try {
+      exportClassTimetablesToCSV(classTimetables, scheduleSettings);
+      exportTeacherTimetablesToCSV(teacherTimetables, scheduleSettings);
+      
+      toast({
+        title: "Export Successful! 📄",
+        description: "Timetables have been exported to CSV files.",
+      });
+    } catch (error) {
+      console.error('Error exporting CSV:', error);
+      toast({
+        title: "Export Failed",
+        description: "There was an error exporting the timetables.",
+        variant: "destructive",
+      });
+    }
   };
-
-  const clearAll = () => {
-    setSubjectData([]);
-    setTeacherPreferences([]);
-    setClassTimetables([]);
-    setTeacherTimetables([]);
-    setAllocationReport([]);
-    
-    toast({
-      title: "Data Cleared",
-      description: "All data has been cleared",
-    });
-  };
-
-  const hasGeneratedTimetables = classTimetables.length > 0 || teacherTimetables.length > 0;
 
   return (
-    <div className="min-h-screen hero-gradient relative overflow-hidden">
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl animate-float"></div>
-        <div className="absolute top-1/4 -left-20 w-60 h-60 bg-secondary/10 rounded-full blur-3xl animate-float" style={{animationDelay: '2s'}}></div>
-        <div className="absolute bottom-1/4 right-1/3 w-40 h-40 bg-accent/10 rounded-full blur-3xl animate-float" style={{animationDelay: '4s'}}></div>
-      </div>
-      
-      <div className="relative z-10 container mx-auto px-4 py-8 space-y-8">
-        {/* Enhanced Header */}
-        <div className="text-center space-y-6 animate-fade-in">
-          <div className="flex items-center justify-center gap-6 animate-scale-in">
-            <div className="relative group">
-              <div className="absolute inset-0 bg-gradient-primary rounded-full blur-xl opacity-30 group-hover:opacity-50 transition-opacity duration-300"></div>
-              <div className="relative glass p-4 rounded-full">
-                <GraduationCap className="h-16 w-16 text-primary drop-shadow-lg" />
-                <Sparkles className="h-6 w-6 text-accent absolute -top-1 -right-1 animate-pulse" />
+    <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-primary/10">
+      {/* Enhanced Header */}
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-purple-500/20 to-pink-500/20 animate-gradient-x"></div>
+        <div className="relative container mx-auto px-4 py-8">
+          <div className="text-center max-w-4xl mx-auto">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <div className="relative">
+                <GraduationCap className="h-12 w-12 text-primary animate-bounce" />
+                <div className="absolute -top-1 -right-1 h-4 w-4 bg-pink-500 rounded-full animate-pulse"></div>
               </div>
-            </div>
-            <div className="space-y-2">
-              <h1 className="text-6xl font-bold gradient-text floating bg-clip-text text-transparent bg-gradient-to-r from-primary via-secondary to-accent">
-                SmartSchedule Pro
+              <h1 className="text-5xl md:text-6xl font-bold gradient-text">
+                Smart Timetable
               </h1>
-              <div className="flex items-center justify-center gap-2">
-                <div className="h-1 w-12 bg-gradient-primary rounded-full"></div>
-                <Badge variant="outline" className="text-xs font-medium border-primary/20">
-                  AI-Powered
-                </Badge>
-                <div className="h-1 w-12 bg-gradient-primary rounded-full"></div>
-              </div>
+              <Brain className="h-12 w-12 text-purple-500 animate-pulse" />
             </div>
-          </div>
-          <p className="text-xl text-muted-foreground max-w-3xl mx-auto animate-fade-in-delay-2 leading-relaxed">
-            Revolutionary timetable generation with intelligent lab allocation, 
-            advanced constraint resolution, and seamless teacher preference integration
-          </p>
-          
-          {/* Enhanced Stats Cards */}
-          {hasGeneratedTimetables && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-5xl mx-auto animate-fade-in-delay-3">
-              <Card className="glass shadow-elegant hover-scale group">
-                <CardContent className="p-6 text-center">
-                  <div className="relative mb-4">
-                    <div className="absolute inset-0 bg-gradient-primary rounded-full blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
-                    <Calendar className="h-10 w-10 text-primary mx-auto relative z-10" />
-                  </div>
-                  <div className="text-3xl font-bold gradient-text mb-1">{classTimetables.length}</div>
-                  <p className="text-sm text-muted-foreground font-medium">Classes Generated</p>
-                </CardContent>
-              </Card>
-              
-              <Card className="glass shadow-elegant hover-scale group">
-                <CardContent className="p-6 text-center">
-                  <div className="relative mb-4">
-                    <div className="absolute inset-0 bg-gradient-primary rounded-full blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
-                    <Users className="h-10 w-10 text-secondary mx-auto relative z-10" />
-                  </div>
-                  <div className="text-3xl font-bold gradient-text mb-1">{teacherTimetables.length}</div>
-                  <p className="text-sm text-muted-foreground font-medium">Teachers Scheduled</p>
-                </CardContent>
-              </Card>
-              
-              <Card className="glass shadow-elegant hover-scale group">
-                <CardContent className="p-6 text-center">
-                  <div className="relative mb-4">
-                    <div className="absolute inset-0 bg-gradient-primary rounded-full blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
-                    <BookOpen className="h-10 w-10 text-accent mx-auto relative z-10" />
-                  </div>
-                  <div className="text-3xl font-bold gradient-text mb-1">{subjectData.length}</div>
-                  <p className="text-sm text-muted-foreground font-medium">Subjects Allocated</p>
-                </CardContent>
-              </Card>
-              
-              <Card className="glass shadow-elegant hover-scale group">
-                <CardContent className="p-6 text-center">
-                  <div className="relative mb-4">
-                    <div className="absolute inset-0 bg-gradient-primary rounded-full blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
-                    <Clock className="h-10 w-10 text-primary mx-auto relative z-10" />
-                  </div>
-                  <div className="text-3xl font-bold gradient-text mb-1">{scheduleSettings.totalPeriodsPerDay}</div>
-                  <p className="text-sm text-muted-foreground font-medium">Periods Per Day</p>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </div>
-
-        {/* Main Content */}
-        <div className="grid gap-8 xl:grid-cols-4 lg:grid-cols-3">
-          {/* Enhanced Settings Panel */}
-          <div className="xl:col-span-1 lg:col-span-1 animate-fade-in-delay-4">
-            <div className="space-y-6">
-              <div className="glass p-1 rounded-xl shadow-elegant">
-                <SettingsPanel
-                  subjectData={subjectData}
-                  teacherPreferences={teacherPreferences}
-                  scheduleSettings={scheduleSettings}
-                  onSubjectDataChange={setSubjectData}
-                  onTeacherPreferencesChange={setTeacherPreferences}
-                  onScheduleSettingsChange={setScheduleSettings}
-                  onGenerateTimetables={generateTimetables}
-                  isGenerating={isGenerating}
-                />
-              </div>
-              
-              {/* Enhanced Action Buttons */}
-              {hasGeneratedTimetables && (
-                <Card className="glass shadow-elegant animate-fade-in-delay-5 border-primary/20">
-                  <CardContent className="p-6 space-y-4">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="h-2 w-2 bg-gradient-primary rounded-full animate-pulse"></div>
-                      <h3 className="font-semibold gradient-text">Export & Actions</h3>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <Button 
-                        onClick={generateTimetables}
-                        disabled={isGenerating}
-                        size="default"
-                        className="w-full hover-scale glass-button bg-gradient-primary text-primary-foreground group"
-                      >
-                        <RefreshCw className="h-4 w-4 mr-2 group-hover:rotate-180 transition-transform duration-500" />
-                        {isGenerating ? "Regenerating..." : "Regenerate Timetables"}
-                      </Button>
-                      
-                      <Button 
-                        onClick={handleExportCSV}
-                        variant="outline" 
-                        size="default" 
-                        className="w-full hover-scale glass-button group"
-                      >
-                        <Download className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
-                        Export to CSV
-                      </Button>
-                      
-                      <Button 
-                        onClick={handleExportExcel}
-                        variant="outline" 
-                        size="default" 
-                        className="w-full hover-scale glass-button group"
-                      >
-                        <FileSpreadsheet className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
-                        Export to Excel
-                      </Button>
-                      
-                      <Button 
-                        onClick={clearAll}
-                        variant="destructive" 
-                        size="default" 
-                        className="w-full hover-scale shadow-glow group"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
-                        Clear All Data
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </div>
-
-          {/* Enhanced Results Area */}
-          <div className="xl:col-span-3 lg:col-span-2 space-y-8">
-            {hasGeneratedTimetables ? (
-              <div className="space-y-8 animate-fade-in-delay-5">
-                <div className="glass p-1 rounded-xl shadow-elegant">
-                  <TimetableDisplay
-                    classTimetables={classTimetables}
-                    teacherTimetables={teacherTimetables}
-                    totalPeriods={scheduleSettings.totalPeriodsPerDay}
-                    lunchPeriod={scheduleSettings.lunchPeriod}
-                    breakPeriods={scheduleSettings.breakPeriods}
-                  />
+            <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
+              AI-powered academic scheduling that adapts to your needs • Lab sessions automatically arranged consecutively • Intelligent conflict resolution
+            </p>
+            
+            {/* Quick Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="card-gradient p-6 rounded-2xl hover:shadow-glow transition-all duration-300">
+                <div className="flex items-center gap-3 mb-2">
+                  <Calendar className="h-8 w-8 text-primary" />
+                  <span className="text-2xl font-bold text-primary">{classTimetables.length}</span>
                 </div>
-                
-                {allocationReport.length > 0 && (
-                  <div className="animate-fade-in-delay-6 glass p-1 rounded-xl shadow-elegant">
-                    <AllocationReport allocations={allocationReport} />
-                  </div>
-                )}
+                <p className="text-sm text-muted-foreground">Class Timetables</p>
               </div>
-            ) : (
-              <Card className="glass text-center p-16 animate-fade-in-delay-5 shadow-elegant border-primary/10">
-                <div className="space-y-6 max-w-2xl mx-auto">
-                  <div className="flex justify-center">
-                    <div className="relative group">
-                      <div className="absolute inset-0 bg-gradient-primary rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity"></div>
-                      <div className="relative glass p-8 rounded-full">
-                        <Calendar className="h-32 w-32 text-primary/60" />
-                        <Sparkles className="h-12 w-12 text-accent absolute -top-2 -right-2 animate-pulse" />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <h3 className="text-3xl font-bold gradient-text">
-                      Ready to Create Magic ✨
-                    </h3>
-                    <p className="text-lg text-muted-foreground leading-relaxed">
-                      Upload your subject data and let our AI-powered engine craft 
-                      the perfect timetables with intelligent constraint resolution 
-                      and optimized scheduling algorithms.
-                    </p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">
+              <div className="card-gradient p-6 rounded-2xl hover:shadow-glow transition-all duration-300">
+                <div className="flex items-center gap-3 mb-2">
+                  <Users className="h-8 w-8 text-purple-500" />
+                  <span className="text-2xl font-bold text-purple-500">{teacherTimetables.length}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">Teacher Schedules</p>
+              </div>
+              <div className="card-gradient p-6 rounded-2xl hover:shadow-glow transition-all duration-300">
+                <div className="flex items-center gap-3 mb-2">
+                  <BookOpen className="h-8 w-8 text-pink-500" />
+                  <span className="text-2xl font-bold text-pink-500">{subjectData.length}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">Subjects Loaded</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="container mx-auto px-4 pb-8">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+          
+          {/* Settings Panel - Left Side */}
+          <div className="xl:col-span-4">
+            <div className="sticky top-4">
+              <SettingsPanel
+                subjectData={subjectData}
+                scheduleSettings={scheduleSettings}
+                teacherPreferences={teacherPreferences}
+                onSubjectDataChange={setSubjectData}
+                onScheduleSettingsChange={setScheduleSettings}
+                onTeacherPreferencesChange={setTeacherPreferences}
+                onGenerateTimetables={generateTimetables}
+                isGenerating={isGenerating}
+              />
+            </div>
+          </div>
+
+          {/* Main Content Area - Right Side */}
+          <div className="xl:col-span-8 space-y-8">
+            
+            {/* Action Buttons */}
+            {(classTimetables.length > 0 || isGenerating) && (
+              <Card className="card-gradient shadow-elegant border-primary/20 overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex flex-col sm:flex-row gap-4">
                     <Button 
                       onClick={generateTimetables}
-                      disabled={subjectData.length === 0 || isGenerating}
+                      disabled={isGenerating}
                       size="lg"
-                      className="hover-scale shadow-elegant px-8 py-6 text-lg group"
+                      className="flex-1 hover-scale glass-button bg-gradient-primary text-primary-foreground group"
                     >
-                      {isGenerating ? (
-                        <>
-                          <RefreshCw className="h-6 w-6 mr-3 animate-spin" />
-                          Generating Magic...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-6 w-6 mr-3 group-hover:rotate-12 transition-transform" />
-                          Generate Timetables
-                        </>
-                      )}
+                      <RefreshCw className="h-5 w-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
+                      {isGenerating ? "Regenerating..." : "Regenerate Timetables"}
+                    </Button>
+                    
+                    <Button 
+                      onClick={handleExportCSV}
+                      variant="outline" 
+                      size="lg" 
+                      className="flex-1 hover-scale glass border-primary/30 hover:border-primary/60"
+                    >
+                      <Download className="h-5 w-5 mr-2" />
+                      Export CSV
                     </Button>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Results Section */}
+            {(classTimetables.length > 0 || teacherTimetables.length > 0 || allocationReport.length > 0) && (
+              <Card className="card-gradient shadow-elegant border-primary/20 overflow-hidden">
+                <CardHeader className="border-b border-border/50 bg-gradient-to-r from-primary/5 via-purple-500/5 to-pink-500/5">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
+                      <BarChart3 className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-2xl">Generated Timetables</CardTitle>
+                      <CardDescription>Review and analyze your optimized schedules</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Tabs defaultValue="classes" className="w-full">
+                    <div className="p-6 border-b border-border/30">
+                      <TabsList className="grid w-full grid-cols-3 bg-muted/50">
+                        <TabsTrigger 
+                          value="classes" 
+                          className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                        >
+                          <Calendar className="h-4 w-4 mr-2" />
+                          Class Schedules
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="teachers" 
+                          className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                        >
+                          <Users className="h-4 w-4 mr-2" />
+                          Teacher Schedules
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="report" 
+                          className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                        >
+                          <BarChart3 className="h-4 w-4 mr-2" />
+                          Allocation Report
+                        </TabsTrigger>
+                      </TabsList>
+                    </div>
+                    
+                    <div className="p-6">
+                      <TabsContent value="classes" className="mt-0">
+                        <TimetableDisplay 
+                          classTimetables={classTimetables}
+                          teacherTimetables={[]}
+                          totalPeriods={scheduleSettings.totalPeriodsPerDay}
+                          lunchPeriod={scheduleSettings.lunchPeriod}
+                          breakPeriods={scheduleSettings.breakPeriods || []}
+                        />
+                      </TabsContent>
+                      
+                      <TabsContent value="teachers" className="mt-0">
+                        <TimetableDisplay 
+                          classTimetables={[]}
+                          teacherTimetables={teacherTimetables}
+                          totalPeriods={scheduleSettings.totalPeriodsPerDay}
+                          lunchPeriod={scheduleSettings.lunchPeriod}
+                          breakPeriods={scheduleSettings.breakPeriods || []}
+                        />
+                      </TabsContent>
+                      
+                      <TabsContent value="report" className="mt-0">
+                        <AllocationReport allocations={allocationReport} />
+                      </TabsContent>
+                    </div>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Loading State */}
+            {isGenerating && (
+              <Card className="card-gradient shadow-elegant border-primary/20 overflow-hidden">
+                <CardContent className="p-12 text-center">
+                  <div className="relative inline-block">
+                    <RefreshCw className="h-16 w-16 text-primary animate-spin" />
+                    <div className="absolute inset-0 h-16 w-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin" style={{ animationDuration: '2s' }}></div>
+                  </div>
+                  <h3 className="text-2xl font-semibold mt-6 mb-2">Generating Your Perfect Timetable</h3>
+                  <p className="text-muted-foreground max-w-md mx-auto">
+                    Our AI is carefully organizing your subjects, ensuring lab sessions are consecutive and optimizing teacher schedules...
+                  </p>
+                  <div className="flex items-center justify-center gap-2 mt-4">
+                    <div className="h-2 w-2 bg-primary rounded-full animate-pulse"></div>
+                    <div className="h-2 w-2 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="h-2 w-2 bg-pink-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Empty State */}
+            {!isGenerating && classTimetables.length === 0 && subjectData.length === 0 && (
+              <Card className="card-gradient shadow-elegant border-primary/20 overflow-hidden">
+                <CardContent className="p-12 text-center">
+                  <div className="relative inline-block mb-6">
+                    <Clock className="h-20 w-20 text-primary/60" />
+                    <Sparkles className="h-8 w-8 text-yellow-500 absolute -top-2 -right-2 animate-pulse" />
+                  </div>
+                  <h3 className="text-2xl font-semibold mb-4">Ready to Create Something Amazing?</h3>
+                  <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+                    Upload your subject data and preferences to get started with intelligent timetable generation.
+                    Our system ensures lab sessions are scheduled consecutively and optimizes for minimal conflicts.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
+                    <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
+                      <Zap className="h-6 w-6 text-primary mx-auto mb-2" />
+                      <p className="text-sm font-medium">Smart Lab Scheduling</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                      <Brain className="h-6 w-6 text-purple-500 mx-auto mb-2" />
+                      <p className="text-sm font-medium">AI-Powered Optimization</p>
+                    </div>
+                  </div>
+                </CardContent>
               </Card>
             )}
           </div>

@@ -273,10 +273,11 @@ export class TimetableGenerator {
       
       // Find consecutive slots on this day (can span break periods but not lunch)
       for (let period = 0; period < this.scheduleSettings.totalPeriodsPerDay; period++) {
-        // If we hit lunch period, check if we have enough slots before it
+        // Skip lunch period entirely
         if (period + 1 === this.scheduleSettings.lunchPeriod) {
+          // If we have enough slots before lunch, use them
           if (currentSequence.length >= remainingPeriods) {
-            consecutiveSlots = [...currentSequence];
+            consecutiveSlots = currentSequence.slice(0, remainingPeriods);
             break;
           }
           // Reset and continue after lunch
@@ -284,18 +285,19 @@ export class TimetableGenerator {
           continue;
         }
         
+        // Allow allocation on break periods for labs (they can span breaks)
         if (this.isLabSlotAvailable(day, period, className, subjectData.staff, subjectData.subject)) {
           currentSequence.push(period);
           
           // If we have enough consecutive slots, we can use this sequence
           if (currentSequence.length >= remainingPeriods) {
-            consecutiveSlots = [...currentSequence];
+            consecutiveSlots = currentSequence.slice(0, remainingPeriods);
             break;
           }
         } else {
           // If we have enough slots before hitting obstacle, use them
           if (currentSequence.length >= remainingPeriods) {
-            consecutiveSlots = [...currentSequence];
+            consecutiveSlots = currentSequence.slice(0, remainingPeriods);
             break;
           }
           currentSequence = [];
@@ -356,32 +358,6 @@ export class TimetableGenerator {
     );
   }
 
-  private isLabSlotAvailable(day: number, period: number, className: string, staffString: string, subjectName: string): boolean {
-    const classSchedule = this.classTimetables.get(className);
-    if (!classSchedule || classSchedule[day][period].subject) return false;
-
-    // Check if there's already a different lab subject on this day for this class
-    // Allow same lab to continue (for consecutive periods) but not different labs
-    if (this.hasDifferentLabOnDay(className, day, subjectName)) return false;
-
-    const staffMembers = this.parseStaffMembers(staffString);
-    
-    // Check if ALL staff members are available
-    for (const staff of staffMembers) {
-      const teacherSchedule = this.teacherTimetables.get(staff.trim());
-      if (!teacherSchedule || teacherSchedule[day][period].subject) {
-        return false;
-      }
-      
-      // Check workload limit
-      const currentWorkload = this.teacherWorkload.get(staff.trim()) || 0;
-      if (currentWorkload >= this.scheduleSettings.maxTeacherPeriodsPerWeek) {
-        return false;
-      }
-    }
-    
-    return true;
-  }
 
   private assignLabSlotWithTracking(slot: { day: number; period: number }, subjectData: SubjectData, className: string): void {
     const { day, period } = slot;
@@ -538,6 +514,33 @@ export class TimetableGenerator {
       // Break if we couldn't allocate any more periods
       if (!allocated) break;
     }
+  }
+
+  private isLabSlotAvailable(day: number, period: number, className: string, staff: string, subject: string): boolean {
+    // Lab periods can be scheduled during break periods (they can span breaks but not lunch)
+    const isLunchPeriod = (period + 1) === this.scheduleSettings.lunchPeriod;
+    
+    // Labs cannot be scheduled during lunch
+    if (isLunchPeriod) {
+      return false;
+    }
+    
+    // Check basic availability (class and teacher availability)
+    if (!this.isSlotAvailable(day, period, className, staff)) {
+      return false;
+    }
+
+    // Additional check: ensure no different lab is scheduled at this slot for this class
+    const classKey = className;
+    const classTimetable = this.classTimetables.get(classKey);
+    if (classTimetable && classTimetable[day] && classTimetable[day][period]) {
+      const existingSubject = classTimetable[day][period].subject;
+      if (this.isLabSubject(existingSubject) && existingSubject !== subject) {
+        return false; // Different lab already scheduled
+      }
+    }
+
+    return true;
   }
 
   private isSlotAvailable(day: number, period: number, className: string, staffString: string): boolean {
