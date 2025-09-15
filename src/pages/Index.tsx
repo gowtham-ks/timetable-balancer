@@ -5,6 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { TimetableDisplay } from '@/components/TimetableDisplay';
 import { AllocationReport } from '@/components/AllocationReport';
+import { CSVEditor } from '@/components/CSVEditor';
+import { FileUpload } from '@/components/FileUpload';
 import { useToast } from '@/hooks/use-toast';
 import { TimetableGenerator } from '@/utils/timetableGenerator';
 import { exportClassTimetablesToCSV, exportTeacherTimetablesToCSV } from '@/utils/exportUtils';
@@ -27,7 +29,10 @@ import {
   Clock,
   Sparkles,
   GraduationCap,
-  Brain
+  Brain,
+  Upload,
+  Settings,
+  Edit
 } from 'lucide-react';
 
 const Index = () => {
@@ -167,16 +172,54 @@ const Index = () => {
           {/* Settings Panel - Left Side */}
           <div className="xl:col-span-4">
             <div className="sticky top-4">
-              <SettingsPanel
-                subjectData={subjectData}
-                scheduleSettings={scheduleSettings}
-                teacherPreferences={teacherPreferences}
-                onSubjectDataChange={setSubjectData}
-                onScheduleSettingsChange={setScheduleSettings}
-                onTeacherPreferencesChange={setTeacherPreferences}
-                onGenerateTimetables={generateTimetables}
-                isGenerating={isGenerating}
-              />
+              <Tabs defaultValue="upload" className="w-full">
+                <TabsList className="grid w-full grid-cols-4 mb-6 electric-pulse">
+                  <TabsTrigger value="upload" className="flex items-center gap-2 hover-scale">
+                    <Upload className="h-4 w-4" />
+                    Upload
+                  </TabsTrigger>
+                  <TabsTrigger value="editor" className="flex items-center gap-2 hover-scale">
+                    <Edit className="h-4 w-4" />
+                    Edit
+                  </TabsTrigger>
+                  <TabsTrigger value="settings" className="flex items-center gap-2 hover-scale">
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </TabsTrigger>
+                  <TabsTrigger value="reports" className="flex items-center gap-2 hover-scale">
+                    <BarChart3 className="h-4 w-4" />
+                    Reports
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="upload" className="animate-fade-in">
+                  <FileUpload onDataUpload={setSubjectData} />
+                </TabsContent>
+
+                <TabsContent value="editor" className="animate-fade-in">
+                  <CSVEditor 
+                    data={subjectData} 
+                    onDataChange={setSubjectData} 
+                  />
+                </TabsContent>
+
+                <TabsContent value="settings" className="animate-fade-in">
+                  <SettingsPanel
+                    subjectData={subjectData}
+                    scheduleSettings={scheduleSettings}
+                    teacherPreferences={teacherPreferences}
+                    onSubjectDataChange={setSubjectData}
+                    onScheduleSettingsChange={setScheduleSettings}
+                    onTeacherPreferencesChange={setTeacherPreferences}
+                    onGenerateTimetables={generateTimetables}
+                    isGenerating={isGenerating}
+                  />
+                </TabsContent>
+
+                <TabsContent value="reports" className="animate-fade-in">
+                  <AllocationReport allocations={allocationReport} />
+                </TabsContent>
+              </Tabs>
             </div>
           </div>
 
