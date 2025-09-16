@@ -9,7 +9,7 @@ import { CSVEditor } from '@/components/CSVEditor';
 import { FileUpload } from '@/components/FileUpload';
 import { useToast } from '@/hooks/use-toast';
 import { TimetableGenerator } from '@/utils/timetableGenerator';
-import { exportClassTimetablesToCSV, exportTeacherTimetablesToCSV } from '@/utils/exportUtils';
+import { exportClassTimetablesToCSV, exportTeacherTimetablesToCSV, exportAllTimetablesToExcel, exportTimetablesToPDF } from '@/utils/exportUtils';
 import { 
   SubjectData, 
   TeacherPreference, 
@@ -111,6 +111,60 @@ const Index = () => {
       toast({
         title: "Export Failed",
         description: "There was an error exporting the timetables.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleExportExcel = () => {
+    if (classTimetables.length === 0) {
+      toast({
+        title: "No Data",
+        description: "Please generate timetables first before exporting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      exportAllTimetablesToExcel(classTimetables, teacherTimetables, scheduleSettings);
+      
+      toast({
+        title: "Excel Export Successful! 📊",
+        description: "Timetables have been exported to Excel file.",
+      });
+    } catch (error) {
+      console.error('Error exporting Excel:', error);
+      toast({
+        title: "Excel Export Failed",
+        description: "There was an error exporting to Excel.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleExportPDF = () => {
+    if (classTimetables.length === 0) {
+      toast({
+        title: "No Data",
+        description: "Please generate timetables first before exporting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      exportTimetablesToPDF(classTimetables, teacherTimetables, scheduleSettings);
+      
+      toast({
+        title: "PDF Export Successful! 📑",
+        description: "Timetables have been exported to PDF file.",
+      });
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast({
+        title: "PDF Export Failed",
+        description: "There was an error exporting to PDF.",
         variant: "destructive",
       });
     }
@@ -230,7 +284,7 @@ const Index = () => {
             {(classTimetables.length > 0 || isGenerating) && (
               <Card className="card-gradient shadow-elegant border-primary/20 overflow-hidden">
                 <CardContent className="p-6">
-                  <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <Button 
                       onClick={generateTimetables}
                       disabled={isGenerating}
@@ -241,15 +295,38 @@ const Index = () => {
                       {isGenerating ? "Regenerating..." : "Regenerate Timetables"}
                     </Button>
                     
+                    <div className="flex gap-2">
+                    
                     <Button 
                       onClick={handleExportCSV}
                       variant="outline" 
                       size="lg" 
-                      className="flex-1 hover-scale glass border-primary/30 hover:border-primary/60"
+                      className="hover-scale glass border-primary/30 hover:border-primary/60"
                     >
                       <Download className="h-5 w-5 mr-2" />
                       Export CSV
                     </Button>
+                    
+                    <Button 
+                      onClick={handleExportExcel}
+                      variant="outline" 
+                      size="lg" 
+                      className="hover-scale glass border-green-500/30 hover:border-green-500/60"
+                    >
+                      <Download className="h-5 w-5 mr-2" />
+                      Export Excel
+                    </Button>
+                    
+                      <Button 
+                        onClick={handleExportPDF}
+                        variant="outline" 
+                        size="lg" 
+                        className="hover-scale glass border-red-500/30 hover:border-red-500/60"
+                      >
+                        <Download className="h-5 w-5 mr-2" />
+                        Export PDF
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

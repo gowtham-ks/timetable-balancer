@@ -184,7 +184,7 @@ export const TimetableDisplay = ({
             <span className="text-4xl">📅</span>
             Class Timetables
           </h2>
-          <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+          <div className="space-y-6">
             {classTimetables.map((timetable, index) => (
               <div 
                 key={timetable.className} 
@@ -204,7 +204,7 @@ export const TimetableDisplay = ({
             <span className="text-4xl">👨‍🏫</span>
             Teacher Timetables
           </h2>
-          <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+          <div className="space-y-6">
             {teacherTimetables.map((timetable, index) => (
               <div 
                 key={timetable.teacherName} 
