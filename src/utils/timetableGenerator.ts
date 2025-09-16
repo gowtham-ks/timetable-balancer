@@ -221,17 +221,20 @@ export class TimetableGenerator {
     return staffString.split(/[,+]/).map(s => s.trim()).filter(s => s.length > 0);
   }
 
-  private isLabSubject(subject: string): boolean {
+  private isLabSubject(subject: string | undefined): boolean {
+    if (!subject) return false;
     return subject.toLowerCase().includes('lab') || 
            subject.toLowerCase().includes('practical') ||
            subject.toLowerCase().includes('workshop');
   }
 
-  private isLibrarySubject(subject: string): boolean {
+  private isLibrarySubject(subject: string | undefined): boolean {
+    if (!subject) return false;
     return subject.toLowerCase().includes('library');
   }
 
-  private isGamesSubject(subject: string): boolean {
+  private isGamesSubject(subject: string | undefined): boolean {
+    if (!subject) return false;
     return subject.toLowerCase().includes('games') || 
            subject.toLowerCase().includes('sports') ||
            subject.toLowerCase().includes('physical education') ||
