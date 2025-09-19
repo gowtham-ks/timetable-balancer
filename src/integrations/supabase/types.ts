@@ -14,16 +14,277 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      classrooms: {
+        Row: {
+          capacity: number
+          created_at: string
+          department: string | null
+          id: string
+          room_number: string
+          room_type: string
+        }
+        Insert: {
+          capacity?: number
+          created_at?: string
+          department?: string | null
+          id?: string
+          room_number: string
+          room_type?: string
+        }
+        Update: {
+          capacity?: number
+          created_at?: string
+          department?: string | null
+          id?: string
+          room_number?: string
+          room_type?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean | null
+          message: string
+          title: string
+          type: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          message: string
+          title: string
+          type?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          message?: string
+          title?: string
+          type?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          department: string | null
+          email: string
+          full_name: string
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department?: string | null
+          email: string
+          full_name: string
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          department?: string | null
+          email?: string
+          full_name?: string
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      schedule_settings: {
+        Row: {
+          break_periods: number[] | null
+          created_at: string
+          id: string
+          lunch_period: number
+          max_teacher_periods_per_week: number
+          total_periods_per_day: number
+          updated_at: string
+        }
+        Insert: {
+          break_periods?: number[] | null
+          created_at?: string
+          id?: string
+          lunch_period?: number
+          max_teacher_periods_per_week?: number
+          total_periods_per_day?: number
+          updated_at?: string
+        }
+        Update: {
+          break_periods?: number[] | null
+          created_at?: string
+          id?: string
+          lunch_period?: number
+          max_teacher_periods_per_week?: number
+          total_periods_per_day?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      subjects: {
+        Row: {
+          created_at: string
+          department: string
+          id: string
+          periods_per_week: number
+          preferred_day: string | null
+          preferred_period: number | null
+          preferred_slots: string | null
+          section: string
+          staff_name: string
+          subject_name: string
+          subject_type: string | null
+          updated_at: string
+          year: string
+        }
+        Insert: {
+          created_at?: string
+          department: string
+          id?: string
+          periods_per_week: number
+          preferred_day?: string | null
+          preferred_period?: number | null
+          preferred_slots?: string | null
+          section: string
+          staff_name: string
+          subject_name: string
+          subject_type?: string | null
+          updated_at?: string
+          year: string
+        }
+        Update: {
+          created_at?: string
+          department?: string
+          id?: string
+          periods_per_week?: number
+          preferred_day?: string | null
+          preferred_period?: number | null
+          preferred_slots?: string | null
+          section?: string
+          staff_name?: string
+          subject_name?: string
+          subject_type?: string | null
+          updated_at?: string
+          year?: string
+        }
+        Relationships: []
+      }
+      teacher_preferences: {
+        Row: {
+          created_at: string
+          department: string | null
+          id: string
+          preferred_day: string
+          preferred_period: number
+          teacher_name: string
+        }
+        Insert: {
+          created_at?: string
+          department?: string | null
+          id?: string
+          preferred_day: string
+          preferred_period: number
+          teacher_name: string
+        }
+        Update: {
+          created_at?: string
+          department?: string | null
+          id?: string
+          preferred_day?: string
+          preferred_period?: number
+          teacher_name?: string
+        }
+        Relationships: []
+      }
+      timetables: {
+        Row: {
+          break_type: string | null
+          class_name: string
+          classroom_id: string | null
+          created_at: string
+          day_of_week: string
+          id: string
+          is_break: boolean | null
+          period_number: number
+          staff_name: string | null
+          subject_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          break_type?: string | null
+          class_name: string
+          classroom_id?: string | null
+          created_at?: string
+          day_of_week: string
+          id?: string
+          is_break?: boolean | null
+          period_number: number
+          staff_name?: string | null
+          subject_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          break_type?: string | null
+          class_name?: string
+          classroom_id?: string | null
+          created_at?: string
+          day_of_week?: string
+          id?: string
+          is_break?: boolean | null
+          period_number?: number
+          staff_name?: string | null
+          subject_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timetables_classroom_id_fkey"
+            columns: ["classroom_id"]
+            isOneToOne: false
+            referencedRelation: "classrooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timetables_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_role: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["user_role"]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["user_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      user_role: "admin" | "teacher" | "student"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +411,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      user_role: ["admin", "teacher", "student"],
+    },
   },
 } as const
