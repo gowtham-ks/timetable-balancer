@@ -29,13 +29,13 @@ const Layout = ({ children }: LayoutProps) => {
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'admin':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+        return 'bg-red-500/10 text-red-700 border-red-500/20 dark:bg-red-900/20 dark:text-red-300';
       case 'teacher':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+        return 'bg-blue-500/10 text-blue-700 border-blue-500/20 dark:bg-blue-900/20 dark:text-blue-300';
       case 'student':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+        return 'bg-green-500/10 text-green-700 border-green-500/20 dark:bg-green-900/20 dark:text-green-300';
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
+        return 'bg-muted/50 text-muted-foreground border-muted-foreground/20';
     }
   };
 
@@ -48,8 +48,8 @@ const Layout = ({ children }: LayoutProps) => {
               Timetable Balancer
             </h1>
             {profile && (
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(profile.role)}`}>
-                {profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}
+              <span className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${getRoleBadgeColor(profile.role)}`}>
+                {profile.role === 'admin' ? '🛡️ Admin' : profile.role === 'teacher' ? '👨‍🏫 Teacher' : '🎓 Student'}
               </span>
             )}
           </div>
